@@ -78,15 +78,54 @@ html, body {
 
 /* ===== LISTS ===== */
 .word-list {
+  list-style: disc;
   margin-left: 25px;
-  margin-top: 8px;
+  padding-left: 0;
 }
 
 .word-list li {
-  font-size: 16px;
+  list-style: disc; /* fallback for older browsers */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
-/* Add link */
+/* Keep bullet visible with flex items */
+.word-list li::marker {
+  color: black;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Fallback for older browsers without ::marker */
+.word-list li::before {
+  content: "•";
+  display: inline-block;
+  width: 1em;
+  margin-left: -1em;
+  color: black;
+}
+
+/* ===== DELETE BUTTON (X) ===== */
+.delete-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: 0.15s ease-in-out;
+}
+
+.delete-btn:hover {
+  background: #dc2626;
+  transform: scale(1.05);
+}
+
+/* ===== ADD LINKS ===== */
 .word-add,
 .word-add-row {
   color: #2563eb;
@@ -112,6 +151,7 @@ html, body {
   border: 1px solid #666;
   padding: 6px;
   font-size: 15px;
+  vertical-align: middle;
 }
 
 /* ===== IA BOX ===== */
@@ -215,3 +255,4 @@ html, body {
     padding: 20px;
   }
 }
+

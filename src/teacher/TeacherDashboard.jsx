@@ -1,11 +1,19 @@
 import SidebarTeacher from "./SidebarTeacher";
-import TeacherSubmits from "./TeacherSubmits";
 import TeacherSettings from "./TeacherSettings";
 import Navbar from "../components/Navbar";
 import React, { useEffect, useState } from "react";
 import "./TeacherDashboard.css";
 import { auth, db, storage } from "../firebase";
-import { collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
+  serverTimestamp,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { jsPDF } from "jspdf";
 
@@ -19,9 +27,7 @@ export default function TeacherDashboard() {
 
   const [objectivesList, setObjectivesList] = useState([""]);
   const [evaluationList, setEvaluationList] = useState([""]);
-  const [scheduleRows, setScheduleRows] = useState([
-    { week: 1, activity: "", deliver: "" }
-  ]);
+  const [scheduleRows, setScheduleRows] = useState([{ week: 1, activity: "", deliver: "" }]);
 
   const currentUser = auth.currentUser;
 
@@ -48,11 +54,7 @@ export default function TeacherDashboard() {
   const addScheduleRow = () => {
     setScheduleRows([
       ...scheduleRows,
-      {
-        week: scheduleRows.length + 1,
-        activity: "",
-        deliver: ""
-      }
+      { week: scheduleRows.length + 1, activity: "", deliver: "" },
     ]);
   };
 
@@ -67,13 +69,13 @@ export default function TeacherDashboard() {
     if (text.length < 40) {
       return setAnalysis({
         status: "Non conforme",
-        suggestions: ["Trop court", "Ajoute plus de contenu"]
+        suggestions: ["Trop court", "Ajoute plus de contenu"],
       });
     }
 
     setAnalysis({
       status: "Conforme",
-      suggestions: ["Structure correcte", "Détails suffisants"]
+      suggestions: ["Structure correcte", "Détails suffisants"],
     });
   };
 
@@ -100,11 +102,48 @@ export default function TeacherDashboard() {
       evaluation: evaluationList,
       schedule: scheduleRows,
       status: analysis.status,
-      pdfUrl
+      pdfUrl,
     });
 
     alert("Plan enregistré !");
+
+    // ===== RESET FORM =====
+    setAnswers({});
+    setObjectivesList([""]);
+    setEvaluationList([""]);
+    setScheduleRows([{ week: 1, activity: "", deliver: "" }]);
+    setAnalysis(null);
     setSubmitting(false);
+
+    // Reload plans
+    const q = query(
+      collection(db, "coursePlans"),
+      where("teacherId", "==", currentUser.uid)
+    );
+    const snap = await getDocs(q);
+    setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  };
+
+  /* ===== Delete Plan ===== */
+  const handleDeletePlan = async (planId) => {
+    if (!window.confirm("Voulez-vous vraiment supprimer ce plan ?")) return;
+
+    try {
+      await deleteDoc(doc(db, "coursePlans", planId));
+      setPlans(plans.filter((p) => p.id !== planId));
+    } catch (error) {
+      console.error("Erreur suppression :", error);
+      alert("Erreur lors de la suppression");
+    }
+  };
+
+  /* ===== Edit Plan ===== */
+  const handleEditPlan = (plan) => {
+    setActiveTab("new");
+    setAnswers(plan.answers);
+    setObjectivesList(plan.objectives || [""]);
+    setEvaluationList(plan.evaluation || [""]);
+    setScheduleRows(plan.schedule || [{ week: 1, activity: "", deliver: "" }]);
   };
 
   return (
@@ -112,18 +151,13 @@ export default function TeacherDashboard() {
       <Navbar />
 
       <div className="dashboard-container">
-
-        {/* ===== NEW SIDEBAR ===== */}
         <SidebarTeacher activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        {/* ===== CONTENT ===== */}
         <div className="dashboard-content">
-
           {/* ================= PLANS ================= */}
           {activeTab === "plans" && (
             <div className="card">
               <h2>Mes plans de cours</h2>
-
               {plans.length === 0 ? (
                 <p>Aucun plan</p>
               ) : (
@@ -136,8 +170,45 @@ export default function TeacherDashboard() {
             </div>
           )}
 
-          {/* ================= SUBMITS ================= */}
-          {activeTab === "submits" && <TeacherSubmits />}
+          {/* ================= REMISES DU PLAN ================= */}
+          {activeTab === "submits" && (
+            <div className="card">
+              <h2>Remises du plan</h2>
+
+              {plans.length === 0 ? (
+                <p>Aucune remise</p>
+              ) : (
+                <table className="word-table">
+                  <thead>
+                    <tr>
+                      <th>Titre</th>
+                      <th>Statut</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plans.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.answers.title}</td>
+                        <td>{p.status}</td>
+                        <td className="action-buttons">
+                          <button className="btn-primary" onClick={() => handleEditPlan(p)}>
+                            Modifier
+                          </button>
+                          <button
+                            className="delete-btn"
+                            onClick={() => handleDeletePlan(p.id)}
+                          >
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
 
           {/* ================= SETTINGS ================= */}
           {activeTab === "settings" && <TeacherSettings />}
@@ -147,9 +218,7 @@ export default function TeacherDashboard() {
             <>
               <div className="card">
                 <h2>Créer un nouveau plan</h2>
-
                 <form onSubmit={(e) => e.preventDefault()}>
-
                   {/* TITLE */}
                   <div className="word-label">Titre :</div>
                   <input
@@ -175,7 +244,7 @@ export default function TeacherDashboard() {
                   <div className="word-label">Objectifs</div>
                   <ul className="word-list">
                     {objectivesList.map((obj, i) => (
-                      <li key={i}>
+                      <li key={i} className="row-item">
                         <input
                           className="word-input"
                           value={obj}
@@ -186,6 +255,14 @@ export default function TeacherDashboard() {
                             setObjectivesList(copy);
                           }}
                         />
+                        <button
+                          className="delete-btn"
+                          onClick={() =>
+                            setObjectivesList(objectivesList.filter((_, index) => index !== i))
+                          }
+                        >
+                          ✕
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -197,7 +274,7 @@ export default function TeacherDashboard() {
                   <div className="word-label">Méthodes d'évaluation</div>
                   <ul className="word-list">
                     {evaluationList.map((m, i) => (
-                      <li key={i}>
+                      <li key={i} className="row-item">
                         <input
                           className="word-input"
                           value={m}
@@ -208,6 +285,14 @@ export default function TeacherDashboard() {
                             setEvaluationList(copy);
                           }}
                         />
+                        <button
+                          className="delete-btn"
+                          onClick={() =>
+                            setEvaluationList(evaluationList.filter((_, index) => index !== i))
+                          }
+                        >
+                          ✕
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -217,13 +302,13 @@ export default function TeacherDashboard() {
 
                   {/* PLANIFICATION */}
                   <div className="word-label">Planification des séances</div>
-
                   <table className="word-table">
                     <thead>
                       <tr>
                         <th>Semaine</th>
                         <th>Activité</th>
                         <th>Remise</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -233,7 +318,6 @@ export default function TeacherDashboard() {
                           <td>
                             <input
                               className="word-input"
-                              placeholder=""
                               value={row.activity}
                               onChange={(e) => {
                                 const copy = [...scheduleRows];
@@ -245,7 +329,6 @@ export default function TeacherDashboard() {
                           <td>
                             <input
                               className="word-input"
-                              placeholder=""
                               value={row.deliver}
                               onChange={(e) => {
                                 const copy = [...scheduleRows];
@@ -253,6 +336,16 @@ export default function TeacherDashboard() {
                                 setScheduleRows(copy);
                               }}
                             />
+                          </td>
+                          <td>
+                            <button
+                              className="delete-btn"
+                              onClick={() =>
+                                setScheduleRows(scheduleRows.filter((_, index) => index !== i))
+                              }
+                            >
+                              ✕
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -263,11 +356,7 @@ export default function TeacherDashboard() {
                     Ajouter une semaine
                   </div>
 
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={analyzePlan}
-                  >
+                  <button type="button" className="btn-primary" onClick={analyzePlan}>
                     Analyse IA
                   </button>
 
@@ -290,7 +379,6 @@ export default function TeacherDashboard() {
               </div>
             </>
           )}
-
         </div>
       </div>
     </>
