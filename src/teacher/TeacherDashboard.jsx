@@ -13,6 +13,8 @@ import {
   serverTimestamp,
   deleteDoc,
   doc,
+  orderBy, // Ajouté
+  limit, // Ajouté
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { jsPDF } from "jspdf";
@@ -21,19 +23,19 @@ export default function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState("new");
 
   const [plans, setPlans] = useState([]);
-  const [answers, setAnswers] = useState({});
+
+  // --- NOUVEAU : État pour le formulaire dynamique ---
+  const [formTemplate, setFormTemplate] = useState(null);
+  const [answers, setAnswers] = useState({}); // Format: { "id_question": "réponse" }
+
   const [analysis, setAnalysis] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [objectivesList, setObjectivesList] = useState([""]);
-  const [evaluationList, setEvaluationList] = useState([""]);
-  const [scheduleRows, setScheduleRows] = useState([{ week: 1, activity: "", deliver: "" }]);
-
   const currentUser = auth.currentUser;
 
-  /* ===== Load plans ===== */
+  /* ===== 1. Charger les plans existants ===== */
   useEffect(() => {
-    const load = async () => {
+    const loadPlans = async () => {
       if (!currentUser) return;
 
       const q = query(
@@ -45,48 +47,113 @@ export default function TeacherDashboard() {
       setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     };
 
-    load();
-  }, [currentUser]);
+    loadPlans();
+  }, [currentUser, activeTab]); // Recharge quand on change d'onglet
 
-  /* ===== Add items ===== */
-  const addObjective = () => setObjectivesList([...objectivesList, ""]);
-  const addEvaluation = () => setEvaluationList([...evaluationList, ""]);
-  const addScheduleRow = () => {
-    setScheduleRows([
-      ...scheduleRows,
-      { week: scheduleRows.length + 1, activity: "", deliver: "" },
-    ]);
+  /* ===== 2. Charger le modèle de formulaire ACTIF (Coordonnateur) ===== */
+  useEffect(() => {
+    const loadFormTemplate = async () => {
+      // On cherche le dernier formulaire créé
+      const q = query(
+        collection(db, "formTemplates"),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        const data = snap.docs[0].data();
+        setFormTemplate({ id: snap.docs[0].id, ...data });
+
+        // Initialiser les réponses vides pour éviter les erreurs "uncontrolled input"
+        const initAnswers = {};
+        if (data.questions) {
+          data.questions.forEach((q) => {
+            initAnswers[q.id] = "";
+          });
+        }
+        setAnswers(initAnswers);
+      }
+    };
+
+    if (activeTab === "new") {
+      loadFormTemplate();
+    }
+  }, [activeTab]);
+
+  /* ===== Gestion des champs dynamiques ===== */
+  const handleInputChange = (questionId, value) => {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
-  /* ===== Analyze Plan ===== */
+  /* ===== Analyse IA (Basée sur les règles du coordonnateur) ===== */
   const analyzePlan = () => {
-    const text =
-      (answers.title || "") +
-      (answers.description || "") +
-      objectivesList.join(" ") +
-      evaluationList.join(" ");
+    if (!formTemplate || !formTemplate.questions) return;
 
-    if (text.length < 40) {
-      return setAnalysis({
+    const feedback = [];
+    let isConform = true;
+
+    // On vérifie chaque question selon sa règle (Simulation locale pour l'instant)
+    formTemplate.questions.forEach((q) => {
+      const answerText = answers[q.id] || "";
+      const rule = q.rule || ""; // La règle définie par le coordonnateur
+
+      // Vérification basique : longueur minimale
+      if (answerText.length < 10) {
+        isConform = false;
+        feedback.push(`Question "${q.label}" : Réponse trop courte.`);
+      }
+
+      // Ici, on connectera plus tard l'API OpenAI pour vérifier "rule" vs "answerText"
+    });
+
+    if (isConform) {
+      setAnalysis({
+        status: "Conforme",
+        suggestions: ["Le plan respecte les critères de base."],
+      });
+    } else {
+      setAnalysis({
         status: "Non conforme",
-        suggestions: ["Trop court", "Ajoute plus de contenu"],
+        suggestions: feedback,
       });
     }
-
-    setAnalysis({
-      status: "Conforme",
-      suggestions: ["Structure correcte", "Détails suffisants"],
-    });
   };
 
-  /* ===== Submit Plan ===== */
+  /* ===== Soumission du Plan ===== */
   const handleSubmitPlan = async () => {
     if (!analysis) return alert("Analyse IA requise");
     setSubmitting(true);
 
+    // Génération PDF Dynamique
     const docPDF = new jsPDF();
     docPDF.setFontSize(18);
     docPDF.text("Plan de cours", 10, 10);
+    docPDF.setFontSize(12);
+
+    let y = 20;
+    // Boucle sur les questions du modèle pour générer le PDF
+    if (formTemplate && formTemplate.questions) {
+      formTemplate.questions.forEach((q) => {
+        // Titre de la question
+        docPDF.setFont("helvetica", "bold");
+        docPDF.text(`Q: ${q.label}`, 10, y);
+        y += 7;
+
+        // Réponse
+        docPDF.setFont("helvetica", "normal");
+        const reponse = answers[q.id] || "";
+        const splitText = docPDF.splitTextToSize(reponse, 180);
+        docPDF.text(splitText, 10, y);
+        y += splitText.length * 7 + 10;
+
+        // Saut de page si nécessaire
+        if (y > 270) {
+          docPDF.addPage();
+          y = 10;
+        }
+      });
+    }
 
     const blob = docPDF.output("blob");
     const filePath = `plans/${currentUser.uid}/plan_${Date.now()}.pdf`;
@@ -94,34 +161,34 @@ export default function TeacherDashboard() {
     await uploadBytes(ref(storage, filePath), blob);
     const pdfUrl = await getDownloadURL(ref(storage, filePath));
 
+    // Sauvegarde dans Firestore
     await addDoc(collection(db, "coursePlans"), {
       teacherId: currentUser.uid,
       createdAt: serverTimestamp(),
-      answers,
-      objectives: objectivesList,
-      evaluation: evaluationList,
-      schedule: scheduleRows,
+      formId: formTemplate?.id, // On lie au modèle utilisé
+      questionsSnapshot: formTemplate?.questions, // On garde une copie des questions au cas où le modèle change
+      answers: answers, // On sauvegarde les réponses dynamiques
       status: analysis.status,
       pdfUrl,
     });
 
     alert("Plan enregistré !");
 
-    // ===== RESET FORM =====
+    // Reset
     setAnswers({});
-    setObjectivesList([""]);
-    setEvaluationList([""]);
-    setScheduleRows([{ week: 1, activity: "", deliver: "" }]);
     setAnalysis(null);
     setSubmitting(false);
 
-    // Reload plans
+    // Recharger la liste
     const q = query(
       collection(db, "coursePlans"),
       where("teacherId", "==", currentUser.uid)
     );
     const snap = await getDocs(q);
     setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+    // Rediriger vers l'onglet "Mes plans"
+    setActiveTab("plans");
   };
 
   /* ===== Delete Plan ===== */
@@ -140,10 +207,11 @@ export default function TeacherDashboard() {
   /* ===== Edit Plan ===== */
   const handleEditPlan = (plan) => {
     setActiveTab("new");
-    setAnswers(plan.answers);
-    setObjectivesList(plan.objectives || [""]);
-    setEvaluationList(plan.evaluation || [""]);
-    setScheduleRows(plan.schedule || [{ week: 1, activity: "", deliver: "" }]);
+    // On recharge les réponses existantes
+    if (plan.answers) {
+      setAnswers(plan.answers);
+    }
+    // Note : Idéalement, il faudrait aussi s'assurer qu'on utilise le bon formTemplate (plan.formId)
   };
 
   return (
@@ -162,222 +230,155 @@ export default function TeacherDashboard() {
                 <p>Aucun plan</p>
               ) : (
                 plans.map((p) => (
-                  <p key={p.id}>
-                    <strong>{p.answers.title}</strong> — {p.status}
-                  </p>
+                  <div key={p.id} className="submit-item">
+                    <p>
+                      <strong>Date :</strong>{" "}
+                      {p.createdAt?.toDate().toLocaleDateString()}
+                    </p>
+                    <p>
+                      <strong>Statut :</strong> {p.status}
+                    </p>
+                    <div className="action-buttons">
+                      <a
+                        href={p.pdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-link"
+                        style={{ marginRight: "10px" }}
+                      >
+                        Voir PDF
+                      </a>
+                      <button
+                        className="btn-primary"
+                        style={{ padding: "5px 10px", fontSize: "14px" }}
+                        onClick={() => handleEditPlan(p)}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        className="delete-btn"
+                        style={{
+                          padding: "5px 10px",
+                          fontSize: "14px",
+                          marginLeft: "10px",
+                        }}
+                        onClick={() => handleDeletePlan(p.id)}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </div>
                 ))
               )}
             </div>
           )}
 
-          {/* ================= REMISES DU PLAN ================= */}
+          {/* ================= REMISES (Si utilisé) ================= */}
           {activeTab === "submits" && (
             <div className="card">
-              <h2>Remises du plan</h2>
-
-              {plans.length === 0 ? (
-                <p>Aucune remise</p>
-              ) : (
-                <table className="word-table">
-                  <thead>
-                    <tr>
-                      <th>Titre</th>
-                      <th>Statut</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {plans.map((p) => (
-                      <tr key={p.id}>
-                        <td>{p.answers.title}</td>
-                        <td>{p.status}</td>
-                        <td className="action-buttons">
-                          <button className="btn-primary" onClick={() => handleEditPlan(p)}>
-                            Modifier
-                          </button>
-                          <button
-                            className="delete-btn"
-                            onClick={() => handleDeletePlan(p.id)}
-                          >
-                            Supprimer
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <h2>Remises</h2>
+              <p>Fonctionnalité à venir</p>
             </div>
           )}
 
           {/* ================= SETTINGS ================= */}
           {activeTab === "settings" && <TeacherSettings />}
 
-          {/* ================= NEW PLAN ================= */}
+          {/* ================= NEW PLAN (DYNAMIQUE) ================= */}
           {activeTab === "new" && (
-            <>
-              <div className="card">
-                <h2>Créer un nouveau plan</h2>
+            <div className="card">
+              <h2>Remplir le plan de cours</h2>
+
+              {!formTemplate ? (
+                <div
+                  style={{
+                    padding: "20px",
+                    background: "#fee2e2",
+                    color: "#b91c1c",
+                    borderRadius: "8px",
+                  }}
+                >
+                  ⚠️ Aucun formulaire actif n'a été trouvé. Demandez au
+                  coordonnateur d'en créer un.
+                </div>
+              ) : (
                 <form onSubmit={(e) => e.preventDefault()}>
-                  {/* TITLE */}
-                  <div className="word-label">Titre :</div>
-                  <input
-                    className="word-input"
-                    value={answers.title || ""}
-                    onChange={(e) =>
-                      setAnswers({ ...answers, title: e.target.value })
-                    }
-                  />
-
-                  {/* DESCRIPTION */}
-                  <div className="word-label">Description du cours</div>
-                  <textarea
-                    className="desc-fixed"
-                    placeholder="..."
-                    value={answers.description || ""}
-                    onChange={(e) =>
-                      setAnswers({ ...answers, description: e.target.value })
-                    }
-                  />
-
-                  {/* OBJECTIFS */}
-                  <div className="word-label">Objectifs</div>
-                  <ul className="word-list">
-                    {objectivesList.map((obj, i) => (
-                      <li key={i} className="row-item">
-                        <input
-                          className="word-input"
-                          value={obj}
-                          placeholder={`Objectif #${i + 1}`}
-                          onChange={(e) => {
-                            const copy = [...objectivesList];
-                            copy[i] = e.target.value;
-                            setObjectivesList(copy);
+                  {/* Boucle sur les questions dynamiques */}
+                  {formTemplate.questions &&
+                    formTemplate.questions.map((q, index) => (
+                      <div
+                        key={q.id}
+                        className="form-group"
+                        style={{ marginBottom: "25px" }}
+                      >
+                        <div
+                          className="word-label"
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
                           }}
-                        />
-                        <button
-                          className="delete-btn"
-                          onClick={() =>
-                            setObjectivesList(objectivesList.filter((_, index) => index !== i))
-                          }
                         >
-                          ✕
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="word-add" onClick={addObjective}>
-                    Ajouter un objectif
-                  </div>
+                          <span>
+                            {index + 1}. {q.label}
+                          </span>
+                        </div>
 
-                  {/* METHODS */}
-                  <div className="word-label">Méthodes d'évaluation</div>
-                  <ul className="word-list">
-                    {evaluationList.map((m, i) => (
-                      <li key={i} className="row-item">
-                        <input
-                          className="word-input"
-                          value={m}
-                          placeholder={`Méthode #${i + 1}`}
-                          onChange={(e) => {
-                            const copy = [...evaluationList];
-                            copy[i] = e.target.value;
-                            setEvaluationList(copy);
+                        {/* Affichage discret de la règle pour aider l'enseignant */}
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            color: "#666",
+                            marginBottom: "8px",
+                            fontStyle: "italic",
                           }}
-                        />
-                        <button
-                          className="delete-btn"
-                          onClick={() =>
-                            setEvaluationList(evaluationList.filter((_, index) => index !== i))
-                          }
                         >
-                          ✕
-                        </button>
-                      </li>
+                          ℹ️ Attendu par l'IA : {q.rule}
+                        </div>
+
+                        <textarea
+                          className="desc-fixed"
+                          placeholder="Votre réponse ici..."
+                          value={answers[q.id] || ""}
+                          onChange={(e) =>
+                            handleInputChange(q.id, e.target.value)
+                          }
+                          style={{ minHeight: "100px" }}
+                        />
+                      </div>
                     ))}
-                  </ul>
-                  <div className="word-add" onClick={addEvaluation}>
-                    Ajouter une méthode
-                  </div>
 
-                  {/* PLANIFICATION */}
-                  <div className="word-label">Planification des séances</div>
-                  <table className="word-table">
-                    <thead>
-                      <tr>
-                        <th>Semaine</th>
-                        <th>Activité</th>
-                        <th>Remise</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {scheduleRows.map((row, i) => (
-                        <tr key={i}>
-                          <td>{row.week}</td>
-                          <td>
-                            <input
-                              className="word-input"
-                              value={row.activity}
-                              onChange={(e) => {
-                                const copy = [...scheduleRows];
-                                copy[i].activity = e.target.value;
-                                setScheduleRows(copy);
-                              }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              className="word-input"
-                              value={row.deliver}
-                              onChange={(e) => {
-                                const copy = [...scheduleRows];
-                                copy[i].deliver = e.target.value;
-                                setScheduleRows(copy);
-                              }}
-                            />
-                          </td>
-                          <td>
-                            <button
-                              className="delete-btn"
-                              onClick={() =>
-                                setScheduleRows(scheduleRows.filter((_, index) => index !== i))
-                              }
-                            >
-                              ✕
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  <div className="word-add-row" onClick={addScheduleRow}>
-                    Ajouter une semaine
-                  </div>
-
-                  <button type="button" className="btn-primary" onClick={analyzePlan}>
-                    Analyse IA
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={analyzePlan}
+                  >
+                    Analyser mes réponses (IA)
                   </button>
 
                   {analysis && (
-                    <div className="analysis-box">
-                      <strong>Résultat :</strong> {analysis.status}
+                    <div className="analysis-box" style={{ marginTop: "20px" }}>
+                      <h3>Résultat de l'analyse : {analysis.status}</h3>
+                      <ul>
+                        {analysis.suggestions.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
                     </div>
                   )}
-                </form>
-              </div>
 
-              <div className="submit-container">
-                <button
-                  className="submit-btn"
-                  onClick={handleSubmitPlan}
-                  disabled={submitting}
-                >
-                  Soumettre et générer le PDF
-                </button>
-              </div>
-            </>
+                  <div className="submit-container">
+                    <button
+                      className="submit-btn"
+                      onClick={handleSubmitPlan}
+                      disabled={submitting || !analysis}
+                      style={{ opacity: submitting || !analysis ? 0.5 : 1 }}
+                    >
+                      {submitting ? "Envoi en cours..." : "Soumettre le plan"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           )}
         </div>
       </div>
