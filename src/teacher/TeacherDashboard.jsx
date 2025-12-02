@@ -328,8 +328,32 @@ export default function TeacherDashboard() {
       docPDF.text(label, pageWidth - margin - tw, pageHeight - 10);
     }
 
+    // --- FILE NAMING FOR FIREBASE STORAGE (Nomenclature: [Nom_Enseignant]_[Code_Cours]_[Timestamp].pdf) ---
+
+    // 1. Clean Teacher Name
+    const teacher = teacherName
+        .replace(/ /g, '_')
+        .replace(/'/g, '')
+        .replace(/[éèêë]/g, 'e')
+        .replace(/[àâä]/g, 'a')
+        .replace(/[ûüù]/g, 'u')
+        .replace(/[îï]/g, 'i')
+        .replace(/[ôö]/g, 'o'); // Enhanced cleaning for common accents
+
+    // 2. Extract Course Code (assuming it's the first part of finalTitle, e.g., "420-5D2-MA")
+    const courseCodeMatch = finalTitle.match(/^([A-Za-z0-9-]+)/);
+    const courseCode = courseCodeMatch ? courseCodeMatch[1] : 'COURS';
+
+    // 3. Generate Unix Timestamp
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    // 4. Construct File Name
+    const fileName = `${teacher}_${courseCode}_${timestamp}.pdf`;
+
+
     const blob = docPDF.output("blob");
-    const filePath = `plans/${currentUser.uid}/plan_${Date.now()}.pdf`;
+    // Use the constructed fileName for the file path in storage
+    const filePath = `plans/${currentUser.uid}/${fileName}`;
 
     await uploadBytes(ref(storage, filePath), blob);
     const pdfUrl = await getDownloadURL(ref(storage, filePath));

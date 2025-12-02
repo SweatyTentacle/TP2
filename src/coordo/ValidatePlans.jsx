@@ -7,8 +7,8 @@ import {
   doc,
   getDoc,
   serverTimestamp,
-  query, // <--- AJOUTÉ
-  orderBy, // <--- AJOUTÉ
+  query,
+  orderBy,
 } from "firebase/firestore";
 
 export default function ValidatePlans() {

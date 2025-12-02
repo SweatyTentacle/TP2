@@ -1,4 +1,3 @@
-// src/coordo/SidebarCoordo.jsx
 import React from "react";
 import "../teacher/SidebarTeacher.css"; // On réutilise le style existant
 
