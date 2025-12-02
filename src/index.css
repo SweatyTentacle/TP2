@@ -1,234 +1,44 @@
-/* ===== GLOBAL FIX ===== */
-html, body {
-  height: 100%;
-  overflow-y: auto;
-  margin: 0;
-  padding: 0;
-  font-family: Arial, sans-serif;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* ===== GLOBAL LAYOUT ===== */
-.dashboard-container {
-  display: flex;
-  min-height: 100vh;
-  background: #f3f4f6;
-  overflow-y: auto;
-}
-
-/* ===== SIDEBAR ===== */
-.sidebar {
-  width: 220px;
-  background: #1f2937;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-}
-
-.sidebar button {
-  background: none;
-  border: none;
-  color: white;
-  padding: 10px 0;
-  cursor: pointer;
-  text-align: left;
-  font-size: 16px;
-  margin-bottom: 4px;
-}
-
-.sidebar button.active {
-  font-weight: bold;
-  color: #2563eb;
-}
-
-/* ===== CONTENT AREA ===== */
-.dashboard-content {
-  flex: 1;
-  padding: 40px;
-  overflow-y: auto;
-}
-
-/* ===== CARD ===== */
-.card {
-  background: white;
-  padding: 40px;
-  border-radius: 10px;
-  max-width: 900px;
-  margin: 0 auto;
-  border: 1px solid #ddd;
-  box-shadow: 0 6px 15px rgba(0,0,0,0.05);
-}
-
-.card h2 {
-  font-size: 28px;
-  margin-bottom: 35px;
-  font-weight: 700;
-}
-
-/* ===== WORD LABEL ===== */
-.word-label {
-  font-size: 16px;
-  font-weight: 600;
-  margin-top: 25px;
-}
-
-/* ===== WORD INPUT ===== */
-.word-input {
-  border: none;
-  border-bottom: 1px solid #777;
-  width: 100%;
-  padding: 4px 0;
-  font-size: 16px;
-  outline: none;
-  background: transparent;
-}
-
-.word-input:focus {
-  border-bottom: 2px solid #2563eb;
-}
-
-/* ===== DESCRIPTION FIXED ===== */
-.desc-fixed {
-  width: 100%;
-  min-height: 160px;
-  border: 1px solid #777;
-  padding: 10px;
-  font-size: 16px;
-  outline: none;
-  resize: vertical;
-}
-
-.desc-fixed:focus {
-  border-color: #2563eb;
-}
-
-/* ===== LISTS ===== */
-.word-list {
-  list-style: disc;
-  margin-left: 25px;
-  padding-left: 0;
-}
-
-.word-list li {
-  list-style: disc;
-  list-style-position: outside;
-  margin-bottom: 6px;
-  font-size: 16px;
-}
-
-/* ===== NEW : INPUT + X ALIGNED ===== */
-.row-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* ===== DELETE BUTTON (X) ===== */
-.delete-btn {
-  background: #ef4444;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: 0.15s ease-in-out;
-}
-
-.delete-btn:hover {
-  background: #dc2626;
-  transform: scale(1.05);
-}
-
-/* ===== Add link ===== */
-.word-add,
-.word-add-row {
-  color: #2563eb;
-  cursor: pointer;
-  font-size: 15px;
-  margin-top: 5px;
-}
-
-.word-add:hover,
-.word-add-row:hover {
-  text-decoration: underline;
-}
-
-/* ===== TABLE ===== */
-.word-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-}
-
-.word-table th,
-.word-table td {
-  border: 1px solid #666;
-  padding: 6px;
-  font-size: 15px;
-  vertical-align: middle;
-}
-
-/* ===== IA BOX ===== */
-.analysis-box {
-  margin-top: 20px;
-  padding: 16px;
-  background: #f4f4f4;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-}
-
-/* ===== PRIMARY BUTTON ===== */
-.btn-primary {
-  background: #2563eb;
-  color: white;
-  padding: 12px 20px;
-  border-radius: 10px;
-  border: none;
-  margin-top: 20px;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.btn-primary:hover {
-  background: #1e4fcf;
-}
-
-/* ===== SUBMIT BUTTON ===== */
-.submit-container {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  margin-top: 25px;
-  margin-bottom: 40px;
-}
-
-.submit-btn {
-  background-color: #3b82f6;
-  color: white;
-  padding: 14px 30px;
-  font-size: 17px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  transition: 0.2s ease-in-out;
-}
-
-.submit-btn:hover {
-  background-color: #2563eb;
-  transform: scale(1.03);
-}
-
-/* ===== RESPONSIVE ===== */
-@media (max-width: 768px) {
-  .dashboard-container {
-    flex-direction: column;
+@layer base {
+  body {
+    @apply bg-dark-bg text-dark-text antialiased;
   }
-  .dashboard-content {
-    padding: 20px;
+}
+
+/* Scrollbar moderne et sombre */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-dark-bg;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-dark-border rounded-full hover:bg-slate-600;
+}
+
+/* Classes utilitaires réutilisables pour ne pas répéter le code */
+@layer components {
+  /* Champs de saisie (Inputs/Textarea) */
+  .input-modern {
+    @apply w-full bg-dark-card border border-dark-border rounded-xl px-4 py-3 text-white placeholder-dark-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all;
   }
-  .card {
-    padding: 20px;
+  
+  /* Bouton Principal (Bleu) */
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-hover text-white font-bold py-2 px-4 rounded-xl transition-all shadow-lg shadow-blue-500/20 active:scale-95;
+  }
+  
+  /* Bouton Danger (Rouge) */
+  .btn-danger {
+    @apply bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold py-2 px-4 rounded-xl transition-all border border-red-500/20;
+  }
+
+  /* Cartes (Conteneurs blancs/gris) */
+  .card-modern {
+    @apply bg-dark-card border border-dark-border rounded-2xl p-6 shadow-xl;
   }
 }

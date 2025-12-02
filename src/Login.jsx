@@ -1,9 +1,5 @@
 import React, { useState } from "react";
-import "./Login.css";
 import maisonneuve from "./assets/maisonneuve.jpg";
-import mailIcon from "./assets/mail.png";
-import lockIcon from "./assets/padlock.png";
-import enterIcon from "./assets/enter.png";
 import { auth, db } from "./firebase";
 import {
   signInWithEmailAndPassword,
@@ -15,197 +11,137 @@ import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const navigate = useNavigate();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // 'role' sert à l'affichage du toggle ET à définir le rôle par défaut
-  // lors d'une première connexion Google
   const [role, setRole] = useState("teacher");
 
   const navigateBasedOnRole = (role) => {
-    if (role === "teacher") {
-      navigate("/dashboard-teacher");
-    } else if (role === "coordonator") {
-      navigate("/dashboard-coordo");
-    } else {
-      alert(`Rôle utilisateur inconnu (${role}). Accès refusé.`);
-    }
+    if (role === "teacher") navigate("/dashboard-teacher");
+    else if (role === "coordonator") navigate("/dashboard-coordo");
+    else alert(`Rôle inconnu: ${role}`);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!email || !password) {
-      alert("Veuillez remplir tous les champs.");
-      return;
-    }
-
+    if (!email || !password) return alert("Remplissez tous les champs.");
     try {
-      // 1. Authentification Firebase
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
-
-      // 2. Récupération du rôle dans Firestore
-      const ref = doc(db, "users", user.uid);
-      const snap = await getDoc(ref);
-
-      if (!snap.exists()) {
-        alert("Aucun profil utilisateur trouvé. Contactez l'administrateur.");
-        return;
-      }
-
-      const storedRole = snap.data().role;
-      navigateBasedOnRole(storedRole);
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const snap = await getDoc(doc(db, "users", cred.user.uid));
+      if (!snap.exists()) return alert("Compte introuvable.");
+      navigateBasedOnRole(snap.data().role);
     } catch (err) {
       console.error(err);
-      alert("Email ou mot de passe incorrect.");
+      alert("Erreur de connexion.");
     }
   };
 
   const handleGoogleLogin = async () => {
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+      const result = await signInWithPopup(auth, new GoogleAuthProvider());
+      const userRef = doc(db, "users", result.user.uid);
+      const snap = await getDoc(userRef);
+      let finalRole = role;
 
-      // Vérifier si l'utilisateur existe déjà dans Firestore
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-
-      let finalRole = role; // Par défaut, on utilise le rôle sélectionné dans le toggle
-
-      if (userSnap.exists()) {
-        // L'utilisateur existe déjà : on respecte son rôle enregistré
-        finalRole = userSnap.data().role;
+      if (snap.exists()) {
+        finalRole = snap.data().role;
       } else {
-        // Nouvel utilisateur : on crée son profil avec le rôle sélectionné
-        // On sépare le displayName en Prénom / Nom (approximation)
-        const names = (user.displayName || "").split(" ");
-        const firstName = names[0] || "Prénom";
-        const lastName = names.slice(1).join(" ") || "Nom";
-
+        const names = (result.user.displayName || "").split(" ");
         await setDoc(userRef, {
-          firstName,
-          lastName,
-          email: user.email,
-          role: finalRole, // <-- Le rôle vient du bouton (Enseignant/Coordo) actif à l'écran
+          firstName: names[0] || "Prénom",
+          lastName: names.slice(1).join(" ") || "Nom",
+          email: result.user.email,
+          role: finalRole,
           createdAt: new Date(),
         });
-
-        alert(
-          `Compte créé avec succès en tant que ${
-            finalRole === "teacher" ? "Enseignant" : "Coordonnateur"
-          } !`
-        );
       }
-
       navigateBasedOnRole(finalRole);
     } catch (err) {
-      console.error("Erreur Google:", err);
-      alert("Erreur lors de la connexion Google.");
+      console.error(err);
+      alert("Erreur Google.");
     }
   };
 
   return (
-    <div className="login-page">
-      {/* Image gauche */}
-      <div className="left-panel">
-        <img src={maisonneuve} alt="Cégep Maisonneuve" className="left-image" />
+    <div className="flex h-screen w-full bg-dark-bg text-dark-text overflow-hidden">
+      <div className="hidden lg:flex w-1/2 relative items-center justify-center">
+        <div className="absolute inset-0 bg-blue-900/40 z-10 mix-blend-multiply"></div>
+        <img
+          src={maisonneuve}
+          alt="Campus"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute bottom-10 left-10 z-20 bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10">
+          <h1 className="text-4xl font-bold text-white mb-2">EnseignIA</h1>
+          <p className="text-gray-200 text-lg">
+            Plateforme de validation intelligente.
+          </p>
+        </div>
       </div>
-
-      {/* Formulaire */}
-      <div className="right-panel">
-        <div className="login-box">
-          <h1 className="login-title">Connexion</h1>
-
-          {/* Toggle des rôles */}
-          <div className="role">
-            <button
-              className={`r-btn ${role === "teacher" ? "active" : ""}`}
-              onClick={() => setRole("teacher")}
-            >
-              Enseignant
-            </button>
-
-            <button
-              className={`r-btn ${role === "coordonator" ? "active" : ""}`}
-              onClick={() => setRole("coordonator")}
-            >
-              Coordonnateur
-            </button>
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+        <div className="w-full max-w-md space-y-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-white mb-2">Connexion</h2>
+            <p className="text-dark-muted">Accédez à votre espace</p>
           </div>
-
-          <form onSubmit={handleSubmit}>
-            {/* Email */}
-            <div className="input-group">
-              <label>Courriel</label>
-              <div className="input-wrapper">
-                <img src={mailIcon} alt="Mail icon" className="input-icon" />
-                <input
-                  type="email"
-                  placeholder="email@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Mot de passe */}
-            <div className="input-group">
-              <label>Mot de passe</label>
-              <div className="input-wrapper">
-                <img src={lockIcon} alt="Lock icon" className="input-icon" />
-                <input
-                  type="password"
-                  placeholder="Mot de passe"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Bouton Connexion Classique */}
-            <button className="login-button" type="submit">
+          <div className="flex bg-dark-card p-1 rounded-xl border border-dark-border">
+            {["teacher", "coordonator"].map((r) => (
+              <button
+                key={r}
+                onClick={() => setRole(r)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                  role === r
+                    ? "bg-primary text-white shadow-lg"
+                    : "text-dark-muted hover:text-white"
+                }`}
+              >
+                {r === "teacher" ? "Enseignant" : "Coordonnateur"}
+              </button>
+            ))}
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <input
+              type="email"
+              placeholder="Courriel"
+              className="input-modern"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <input
+              type="password"
+              placeholder="Mot de passe"
+              className="input-modern"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button type="submit" className="w-full btn-primary py-3 text-lg">
               Se connecter
-              <img src={enterIcon} alt="Enter icon" className="btn-icon" />
             </button>
           </form>
-
-          <div
-            style={{ display: "flex", alignItems: "center", margin: "20px 0" }}
-          >
-            <div style={{ flex: 1, height: "1px", background: "#ddd" }}></div>
-            <span
-              style={{ padding: "0 10px", color: "#666", fontSize: "13px" }}
-            >
-              OU
-            </span>
-            <div style={{ flex: 1, height: "1px", background: "#ddd" }}></div>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-dark-border"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-dark-bg text-dark-muted">OU</span>
+            </div>
           </div>
-
-          {/* Bouton Google */}
           <button
-            className="login-button"
             onClick={handleGoogleLogin}
-            style={{ background: "#db4437", marginTop: "0" }} // Rouge Google
-            type="button"
+            className="w-full py-3 bg-white text-gray-900 font-bold rounded-xl hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
           >
-            Se connecter avec Google
+            <span className="text-xl">G</span> Continuer avec Google
           </button>
-
-          {/* Lien vers Register */}
-          <div className="register-link">
+          <p className="text-center text-dark-muted">
             Pas de compte ?{" "}
-            <span onClick={() => navigate("/register")}>
-              Créer un compte courriel
+            <span
+              onClick={() => navigate("/register")}
+              className="text-primary hover:text-blue-400 cursor-pointer underline"
+            >
+              S'inscrire
             </span>
-          </div>
+          </p>
         </div>
       </div>
     </div>

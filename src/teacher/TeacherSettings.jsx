@@ -9,48 +9,54 @@ export default function TeacherSettings() {
 
   const handleSave = async () => {
     if (!name.trim()) return alert("Nom invalide");
-
     setSaving(true);
-
     try {
       await updateProfile(user, { displayName: name });
-      await user.reload(); // Met à jour auth.currentUser
+      await user.reload();
       alert("Nom mis à jour !");
-      window.location.reload(); // 🔹 Recharge la page complète
     } catch (error) {
       console.error(error);
-      alert("Erreur lors de la mise à jour du nom.");
     }
-
     setSaving(false);
   };
 
-  const logout = () => auth.signOut();
-
   return (
-    <div className="card">
-      <h2>Paramètres du compte</h2>
-
-      <div className="settings-row">
-        <label>Nom complet :</label>
-        <input
-          className="word-input"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button className="btn-primary" onClick={handleSave} disabled={saving}>
-          Sauvegarder
-        </button>
+    <div className="max-w-xl mx-auto mt-10 card-modern">
+      <h2 className="text-2xl font-bold text-white mb-6">Paramètres</h2>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm text-dark-muted mb-1">
+            Nom complet
+          </label>
+          <div className="flex gap-2">
+            <input
+              className="input-modern"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <button
+              className="btn-primary whitespace-nowrap"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              Sauvegarder
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm text-dark-muted mb-1">Email</label>
+          <input
+            className="input-modern opacity-50 cursor-not-allowed"
+            value={user.email}
+            disabled
+          />
+        </div>
+        <div className="pt-4 border-t border-dark-border">
+          <button className="w-full btn-danger" onClick={() => auth.signOut()}>
+            Se déconnecter
+          </button>
+        </div>
       </div>
-
-      <div className="settings-row">
-        <label>Email :</label>
-        <input className="word-input" value={user.email} disabled />
-      </div>
-
-      <button className="btn-logout" onClick={logout}>
-        Se déconnecter
-      </button>
     </div>
   );
 }
