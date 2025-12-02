@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { auth } from "../firebase";
 import { updateProfile } from "firebase/auth";
 
-export default function TeacherSettings() {
+export default function CoordoSettings() {
   const user = auth.currentUser;
   const [name, setName] = useState(user?.displayName || "");
   const [saving, setSaving] = useState(false);

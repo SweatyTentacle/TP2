@@ -1,52 +1,55 @@
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase"; 
+import { db, auth } from "../firebase";
 import {
   collection,
   addDoc,
   getDocs,
   updateDoc,
   doc,
-  deleteDoc, 
+  deleteDoc,
   query,
   orderBy,
   where,
   getDoc,
-  serverTimestamp
+  serverTimestamp,
 } from "firebase/firestore";
 
 // =======================================================================
 // 1. HOOK D'AUTHENTIFICATION RÉEL (Lit l'UID et le rôle dans Firestore)
 // =======================================================================
 const useAuthInfo = () => {
-    const [authInfo, setAuthInfo] = useState({ currentUserId: null, userRole: null });
-    const [isLoading, setIsLoading] = useState(true);
+  const [authInfo, setAuthInfo] = useState({
+    currentUserId: null,
+    userRole: null,
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged(async user => {
-            if (user) {
-                try {
-                    const ref = doc(db, "users", user.uid);
-                    const snap = await getDoc(ref);
-                    let storedRole = null;
-                    if (snap.exists()) {
-                        storedRole = snap.data().role; 
-                    }
-                    setAuthInfo({
-                        currentUserId: user.uid, 
-                        userRole: storedRole || null,
-                    });
-                } catch (error) {
-                    console.error("Erreur lors de la récupération du rôle:", error);
-                    setAuthInfo({ currentUserId: user.uid, userRole: null });
-                }
-            } else {
-                setAuthInfo({ currentUserId: null, userRole: null });
-            }
-            setIsLoading(false);
-        });
-        return unsubscribe;
-    }, []);
-    return { ...authInfo, isLoading };
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          const ref = doc(db, "users", user.uid);
+          const snap = await getDoc(ref);
+          let storedRole = null;
+          if (snap.exists()) {
+            storedRole = snap.data().role;
+          }
+          setAuthInfo({
+            currentUserId: user.uid,
+            userRole: storedRole || null,
+          });
+        } catch (error) {
+          console.error("Erreur lors de la récupération du rôle:", error);
+          setAuthInfo({ currentUserId: user.uid, userRole: null });
+        }
+      } else {
+        setAuthInfo({ currentUserId: null, userRole: null });
+      }
+      setIsLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+  return { ...authInfo, isLoading };
 };
 // =======================================================================
 // FIN DU HOOK
@@ -59,9 +62,7 @@ const defaultCoursePlan = () => ({
     objective: "",
     description: "",
   },
-  weeks: [
-    { id: 1, label: "Semaine 1", learning: "", homework: "" },
-  ],
+  weeks: [{ id: 1, label: "Semaine 1", learning: "", homework: "" }],
   exams: [
     // Exemple: { id: 1, title: "Examen final", date: "", coverage: "" }
   ],
@@ -110,7 +111,7 @@ export default function ManageForms() {
   const { currentUserId, userRole, isLoading } = useAuthInfo();
 
   // Charger les modèles avec filtre par rôle
-   const loadForms = async () => {
+  const loadForms = async () => {
     if (isLoading || !currentUserId || !userRole) return;
 
     let formsQuery;
@@ -122,28 +123,37 @@ export default function ManageForms() {
       );
     } else {
       // Keep simple orderBy for unfiltered listing
-      formsQuery = query(collection(db, "formTemplates"), orderBy("createdAt", "desc"));
+      formsQuery = query(
+        collection(db, "formTemplates"),
+        orderBy("createdAt", "desc")
+      );
     }
 
     const allSnap = await getDocs(formsQuery);
-    let loadedTemplates = allSnap.docs.map(d => ({
+    let loadedTemplates = allSnap.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     }));
 
     loadedTemplates.sort((a, b) => {
-      const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
-      const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+      const ta = a.createdAt?.toDate
+        ? a.createdAt.toDate().getTime()
+        : new Date(a.createdAt || 0).getTime();
+      const tb = b.createdAt?.toDate
+        ? b.createdAt.toDate().getTime()
+        : new Date(b.createdAt || 0).getTime();
       return tb - ta;
     });
-      setTemplatesList(loadedTemplates);
+    setTemplatesList(loadedTemplates);
 
     const activeForm = loadedTemplates.length > 0 ? loadedTemplates[0] : null;
     if (activeForm) {
       setActiveFormId(activeForm.id);
       setCoursePlan({
         meta: activeForm.meta || { title: "", objective: "", description: "" },
-        weeks: activeForm.weeks || [{ id: 1, label: "Semaine 1", learning: "", homework: "" }],
+        weeks: activeForm.weeks || [
+          { id: 1, label: "Semaine 1", learning: "", homework: "" },
+        ],
         exams: activeForm.exams || [],
         questions: activeForm.questions || defaultCoursePlan().questions,
       });
@@ -159,11 +169,14 @@ export default function ManageForms() {
 
   // Helpers de mise à jour
   const updateMeta = (field, value) => {
-    setCoursePlan(prev => ({ ...prev, meta: { ...prev.meta, [field]: value } }));
+    setCoursePlan((prev) => ({
+      ...prev,
+      meta: { ...prev.meta, [field]: value },
+    }));
   };
 
   const addWeek = () => {
-    setCoursePlan(prev => ({
+    setCoursePlan((prev) => ({
       ...prev,
       weeks: [
         ...prev.weeks,
@@ -178,7 +191,7 @@ export default function ManageForms() {
   };
 
   const updateWeek = (index, field, value) => {
-    setCoursePlan(prev => {
+    setCoursePlan((prev) => {
       const weeks = [...prev.weeks];
       weeks[index] = { ...weeks[index], [field]: value };
       return { ...prev, weeks };
@@ -186,17 +199,21 @@ export default function ManageForms() {
   };
 
   const removeWeek = (index) => {
-    setCoursePlan(prev => {
+    setCoursePlan((prev) => {
       const weeks = [...prev.weeks];
       weeks.splice(index, 1);
       // Re-labeller après suppression
-      const relabeled = weeks.map((w, i) => ({ ...w, label: `Semaine ${i + 1}`, id: i + 1 }));
+      const relabeled = weeks.map((w, i) => ({
+        ...w,
+        label: `Semaine ${i + 1}`,
+        id: i + 1,
+      }));
       return { ...prev, weeks: relabeled };
     });
   };
 
   const addExam = () => {
-    setCoursePlan(prev => ({
+    setCoursePlan((prev) => ({
       ...prev,
       exams: [
         ...prev.exams,
@@ -211,7 +228,7 @@ export default function ManageForms() {
   };
 
   const updateExam = (index, field, value) => {
-    setCoursePlan(prev => {
+    setCoursePlan((prev) => {
       const exams = [...prev.exams];
       exams[index] = { ...exams[index], [field]: value };
       return { ...prev, exams };
@@ -219,7 +236,7 @@ export default function ManageForms() {
   };
 
   const removeExam = (index) => {
-    setCoursePlan(prev => {
+    setCoursePlan((prev) => {
       const exams = [...prev.exams];
       exams.splice(index, 1);
       const relabeled = exams.map((e, i) => ({ ...e, id: i + 1 }));
@@ -229,12 +246,17 @@ export default function ManageForms() {
 
   // Supprimer un template
   const deleteTemplate = async (templateId) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce modèle ?")) return;
-    if (userRole !== 'coordonator' && userRole !== 'teacher') return alert("Action non autorisée.");
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce modèle ?"))
+      return;
+    if (userRole !== "coordonator" && userRole !== "teacher")
+      return alert("Action non autorisée.");
     try {
       await deleteDoc(doc(db, "formTemplates", templateId));
-      setTemplatesList(templatesList.filter(t => t.id !== templateId));
-      if (activeFormId === templateId) { setCoursePlan(defaultCoursePlan()); setActiveFormId(null); }
+      setTemplatesList(templatesList.filter((t) => t.id !== templateId));
+      if (activeFormId === templateId) {
+        setCoursePlan(defaultCoursePlan());
+        setActiveFormId(null);
+      }
       alert("Modèle supprimé avec succès !");
     } catch (e) {
       console.error("Erreur de suppression:", e);
@@ -246,53 +268,59 @@ export default function ManageForms() {
     setActiveFormId(template.id);
     setCoursePlan({
       meta: template.meta || { title: "", objective: "", description: "" },
-      weeks: template.weeks || [{ id: 1, label: "Semaine 1", learning: "", homework: "" }],
+      weeks: template.weeks || [
+        { id: 1, label: "Semaine 1", learning: "", homework: "" },
+      ],
       exams: template.exams || [],
       questions: template.questions || defaultCoursePlan().questions,
     });
-    window.scrollTo(0, 0); 
+    window.scrollTo(0, 0);
     alert(`Modèle '${template.id}' chargé pour modification.`);
   };
 
   // Sauvegarder
   const saveForm = async () => {
-  // Validations basiques côté client
-  if (!coursePlan.meta.title.trim()) return alert("Le titre du cours est obligatoire.");
-  if (!coursePlan.meta.objective.trim()) return alert("L’objectif du cours est obligatoire.");
-  if (!coursePlan.meta.description.trim()) return alert("La description du cours est obligatoire.");
-  if (!currentUserId) return alert("Erreur d'authentification. Veuillez vous reconnecter.");
+    // Validations basiques côté client
+    if (!coursePlan.meta.title.trim())
+      return alert("Le titre du cours est obligatoire.");
+    if (!coursePlan.meta.objective.trim())
+      return alert("L’objectif du cours est obligatoire.");
+    if (!coursePlan.meta.description.trim())
+      return alert("La description du cours est obligatoire.");
+    if (!currentUserId)
+      return alert("Erreur d'authentification. Veuillez vous reconnecter.");
 
-  try {
-    const payload = {
-      meta: coursePlan.meta,
-      weeks: coursePlan.weeks,
-      exams: coursePlan.exams,
-      questions: coursePlan.questions, // règles IA incluses
-      updatedAt: serverTimestamp(), // <-- use Firestore timestamp
-    };
+    try {
+      const payload = {
+        meta: coursePlan.meta,
+        weeks: coursePlan.weeks,
+        exams: coursePlan.exams,
+        questions: coursePlan.questions, // règles IA incluses
+        updatedAt: serverTimestamp(), // <-- use Firestore timestamp
+      };
 
-    if (activeFormId) {
-      const formRef = doc(db, "formTemplates", activeFormId);
-      await updateDoc(formRef, payload);
-      await loadForms();
-      alert("Modèle de plan de cours mis à jour !");
-    } else {
-      const newDoc = await addDoc(collection(db, "formTemplates"), {
-        ...payload,
-        createdAt: serverTimestamp(), // <-- use Firestore timestamp
-        active: true,
-        creatorId: currentUserId,
-        type: "course-plan",
-      });
-      setActiveFormId(newDoc.id);
-      await loadForms();
-      alert("Nouveau modèle de plan de cours sauvegardé et activé !");
+      if (activeFormId) {
+        const formRef = doc(db, "formTemplates", activeFormId);
+        await updateDoc(formRef, payload);
+        await loadForms();
+        alert("Modèle de plan de cours mis à jour !");
+      } else {
+        const newDoc = await addDoc(collection(db, "formTemplates"), {
+          ...payload,
+          createdAt: serverTimestamp(), // <-- use Firestore timestamp
+          active: true,
+          creatorId: currentUserId,
+          type: "course-plan",
+        });
+        setActiveFormId(newDoc.id);
+        await loadForms();
+        alert("Nouveau modèle de plan de cours sauvegardé et activé !");
+      }
+    } catch (e) {
+      console.error("Error saving form:", e);
+      alert(`Erreur lors de la sauvegarde: ${e?.message || e}`);
     }
-  } catch (e) {
-    console.error("Error saving form:", e);
-    alert(`Erreur lors de la sauvegarde: ${e?.message || e}`);
-  }
-};
+  };
 
   // ==================================================
   // 3. GESTION DE L'ÉTAT ET DES ACCÈS AU RENDU
@@ -301,247 +329,103 @@ export default function ManageForms() {
     return <div className="card">Chargement des permissions...</div>;
   }
   if (!currentUserId) {
-    return <div className="card">Veuillez vous connecter pour gérer les formulaires.</div>;
+    return (
+      <div className="card">
+        Veuillez vous connecter pour gérer les formulaires.
+      </div>
+    );
   }
   if (!userRole) {
     return (
       <div className="card">
-        Accès refusé. Votre compte est connecté (UID: {currentUserId.substring(0, 5)}...), mais le rôle n'a pas pu être chargé depuis la base de données.
-        <br/><br/>
-        <strong>Vérification requise :</strong> Assurez-vous que le document de cet utilisateur dans la collection <strong>"users"</strong> contient le champ <strong>"role"</strong>.
+        Accès refusé. Votre compte est connecté (UID:{" "}
+        {currentUserId.substring(0, 5)}...), mais le rôle n'a pas pu être chargé
+        depuis la base de données.
+        <br />
+        <br />
+        <strong>Vérification requise :</strong> Assurez-vous que le document de
+        cet utilisateur dans la collection <strong>"users"</strong> contient le
+        champ <strong>"role"</strong>.
       </div>
     );
   }
-  if (userRole !== 'coordonator' && userRole !== 'teacher') {
-    return <div className="card">Accès refusé. Votre rôle ({userRole}) n'a pas les droits de gestion (seuls 'coordonator' et 'teacher' sont autorisés).</div>;
+  if (userRole !== "coordonator" && userRole !== "teacher") {
+    return (
+      <div className="card">
+        Accès refusé. Votre rôle ({userRole}) n'a pas les droits de gestion
+        (seuls 'coordonator' et 'teacher' sont autorisés).
+      </div>
+    );
   }
 
   // --- RENDU ---
   return (
-    <div>
-      <div className="card">
-        <h2>{activeFormId ? `Édition du plan de cours (${activeFormId})` : "Créer un modèle de plan de cours"}</h2>
-        <p>Définissez les champs du plan de cours, la planification hebdomadaire et les évaluations. Des règles de validation IA sont associées à chaque section.</p>
-
-        {/* Métadonnées du cours */}
-        <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #ddd", borderRadius: "8px" }}>
-          <strong>Informations du cours</strong>
-          <div className="word-label">Titre du cours :</div>
-          <input
-            className="word-input"
-            value={coursePlan.meta.title}
-            placeholder="Ex: Programmation Web 2"
-            onChange={(e) => updateMeta("title", e.target.value)}
-          />
-
-          <div className="word-label">Objectif du cours :</div>
-          <textarea
-            className="desc-fixed"
-            style={{ minHeight: "60px" }}
-            value={coursePlan.meta.objective}
-            placeholder="Décrire les compétences et objectifs pédagogiques."
-            onChange={(e) => updateMeta("objective", e.target.value)}
-          />
-
-          <div className="word-label">Description du cours :</div>
-          <textarea
-            className="desc-fixed"
-            style={{ minHeight: "100px" }}
-            value={coursePlan.meta.description}
-            placeholder="Décrire les contenus, méthodes, ressources, prérequis, etc."
-            onChange={(e) => updateMeta("description", e.target.value)}
-          />
-        </div>
-
-        {/* Semaines */}
-        <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #ddd", borderRadius: "8px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <strong>Planification hebdomadaire</strong>
-            <button
-              onClick={addWeek}
-              style={{ background: "none", border: "1px solid #3b82f6", color: "#3b82f6", padding: "4px 8px", fontSize: "12px", borderRadius: "4px" }}
-            >
-              + Ajouter une semaine
-            </button>
-          </div>
-
-          {coursePlan.weeks.map((w, i) => (
-            <div key={w.id} style={{ marginTop: "12px", padding: "12px", border: "1px dashed #ddd", borderRadius: "6px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <strong>{w.label}</strong>
-                <button
-                  onClick={() => removeWeek(i)}
-                  style={{ background: "#ef4444", color: "white", padding: "4px 8px", fontSize: "12px", borderRadius: "4px" }}
-                >
-                  Supprimer
-                </button>
-              </div>
-
-              <div className="word-label" style={{ marginTop: "8px" }}>Ce qui sera appris :</div>
-              <textarea
-                className="desc-fixed"
-                style={{ minHeight: "60px" }}
-                value={w.learning}
-                placeholder="Contenu, notions, activités en classe."
-                onChange={(e) => updateWeek(i, "learning", e.target.value)}
-              />
-
-              <div className="word-label">Devoirs / travail à la maison :</div>
-              <textarea
-                className="desc-fixed"
-                style={{ minHeight: "60px" }}
-                value={w.homework}
-                placeholder="Exercices, lectures, projets à remettre."
-                onChange={(e) => updateWeek(i, "homework", e.target.value)}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Examens */}
-        <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #ddd", borderRadius: "8px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <strong>Examens / Évaluations</strong>
-            <button
-              onClick={addExam}
-              style={{ background: "none", border: "1px solid #3b82f6", color: "#3b82f6", padding: "4px 8px", fontSize: "12px", borderRadius: "4px" }}
-            >
-              + Ajouter une évaluation
-            </button>
-          </div>
-
-          {coursePlan.exams.length === 0 && (
-            <div style={{ fontSize: "12px", color: "#666", marginTop: "8px" }}>
-              Ajoutez au moins une évaluation (contrôle, examen, projet).
-            </div>
-          )}
-
-          {coursePlan.exams.map((ex, i) => (
-            <div key={ex.id} style={{ marginTop: "12px", padding: "12px", border: "1px dashed #ddd", borderRadius: "6px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <strong>Évaluation #{i + 1}</strong>
-                <button
-                  onClick={() => removeExam(i)}
-                  style={{ background: "#ef4444", color: "white", padding: "4px 8px", fontSize: "12px", borderRadius: "4px" }}
-                >
-                  Supprimer
-                </button>
-              </div>
-
-              <div className="word-label" style={{ marginTop: "8px" }}>Titre :</div>
-              <input
-                className="word-input"
-                value={ex.title}
-                placeholder="Ex: Examen final"
-                onChange={(e) => updateExam(i, "title", e.target.value)}
-              />
-
-              <div className="word-label">Date (YYYY-MM-DD) :</div>
-              <input
-                className="word-input"
-                value={ex.date}
-                placeholder="Ex: 2025-12-18"
-                onChange={(e) => updateExam(i, "date", e.target.value)}
-              />
-
-              <div className="word-label">Matière couverte :</div>
-              <textarea
-                className="desc-fixed"
-                style={{ minHeight: "60px" }}
-                value={ex.coverage}
-                placeholder="Chapitres, compétences, thématiques évaluées."
-                onChange={(e) => updateExam(i, "coverage", e.target.value)}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Règles IA visibles */}
-        <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #eee", borderRadius: "8px", background: "#fafafa" }}>
-          <strong>Règles de validation IA</strong>
-          <ul style={{ marginTop: "8px" }}>
-            {coursePlan.questions.map(q => (
-              <li key={q.id} style={{ fontSize: "12px", marginBottom: "6px" }}>
-                <strong>{q.label}:</strong> {q.rule}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div style={{ marginTop: "20px" }}>
-          <button className="btn-primary" onClick={saveForm}>
-            {activeFormId ? "Mettre à jour le modèle" : "Sauvegarder et activer le nouveau modèle"}
+    <div className="space-y-8 max-w-5xl mx-auto">
+      <div className="card-modern">
+        <div className="flex justify-between mb-6 border-b border-dark-border pb-4">
+          <h2 className="text-2xl font-bold text-white">Éditeur de Modèle</h2>
+          <button
+            onClick={() => {
+              setActiveFormId(null);
+              setCoursePlan(defaultCoursePlan());
+            }}
+            className="text-sm bg-dark-bg px-3 py-1 rounded text-white"
+          >
+            Nouveau
           </button>
-          {activeFormId && (
-            <button
-              onClick={() => { setCoursePlan(defaultCoursePlan()); setActiveFormId(null); }}
-              style={{ marginLeft: '10px', background: '#ccc', color: 'black', padding: '6px 12px', borderRadius: '4px' }}
-            >
-              Nouveau modèle
-            </button>
-          )}
         </div>
+        <div className="space-y-4">
+          <input
+            className="input-modern"
+            value={coursePlan.meta.title}
+            onChange={(e) => updateMeta("title", e.target.value)}
+            placeholder="Titre par défaut"
+          />
+          {coursePlan.questions.map((q, i) => (
+            <div
+              key={i}
+              className="bg-dark-bg/50 p-4 rounded-lg border border-dark-border"
+            >
+              <span className="font-bold text-white block mb-2">{q.label}</span>
+              <input
+                className="input-modern text-sm"
+                value={q.rule}
+                onChange={(e) => {
+                  const n = [...coursePlan.questions];
+                  n[i].rule = e.target.value;
+                  setCoursePlan({ ...coursePlan, questions: n });
+                }}
+                placeholder="Règle IA..."
+              />
+            </div>
+          ))}
+        </div>
+        <button onClick={saveForm} className="btn-primary w-full mt-8">
+          Sauvegarder
+        </button>
       </div>
 
-      <hr style={{ margin: '40px 0' }} />
-
-      <div className="card">
-        <h3>Modèles enregistrés ({templatesList.length})</h3>
-        {templatesList.length === 0 ? (
-          <p>Aucun modèle de plan de cours enregistré par votre compte.</p>
-        ) : (
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {templatesList.map((template) => (
-              <li 
-                key={template.id} 
-                style={{ 
-                  padding: '10px 0', borderBottom: '1px solid #eee', 
-                  display: 'flex', justifyContent: 'space-between', 
-                  alignItems: 'center' 
+      <div className="card-modern">
+        <h3 className="text-xl font-bold text-white mb-4">Modèles</h3>
+        <div className="space-y-2">
+          {templatesList.map((t) => (
+            <div
+              key={t.id}
+              className="flex justify-between items-center bg-dark-bg p-3 rounded-lg"
+            >
+              <span className="text-slate-300 text-sm">{t.id}</span>
+              <button
+                onClick={() => {
+                  setActiveFormId(t.id);
+                  setCoursePlan(t);
                 }}
+                className="text-blue-400 text-sm"
               >
-                <div>
-                  <strong>ID: {template.id}</strong>
-                  <span style={{ marginLeft: '15px', color: template.active ? 'green' : 'gray' }}>
-                    ({template.active ? "ACTIF" : "Inactif"})
-                  </span>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-  {
-    (() => {
-      const ts = template.createdAt;
-      let dateStr = "Date inconnue";
-      try {
-        if (ts?.toDate) {
-          dateStr = ts.toDate().toLocaleDateString();
-        } else if (typeof ts === "string" || ts instanceof Date) {
-          dateStr = new Date(ts).toLocaleDateString();
-        }
-      } catch {}
-      return <>Créé le: {dateStr}</>;
-    })()
-  }
-  {template.creatorId && <span style={{ marginLeft: '10px', fontWeight: 'bold' }}> (Créateur: {template.creatorId.substring(0, 5)}...)</span>}
-  {template.type && <span style={{ marginLeft: '10px' }}>Type: {template.type}</span>}
-</div>
-                </div>
-                <div>
-                  <button 
-                    onClick={() => editTemplate(template)} 
-                    style={{ background: '#3b82f6', color: 'white', marginRight: '10px', padding: '6px 12px', borderRadius: '4px' }}
-                  >
-                    Modifier
-                  </button>
-                  <button 
-                    onClick={() => deleteTemplate(template.id)} 
-                    style={{ background: '#ef4444', color: 'white', padding: '6px 12px', borderRadius: '4px' }}
-                  >
-                    Supprimer
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                Modifier
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
