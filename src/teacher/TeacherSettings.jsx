@@ -12,12 +12,17 @@ export default function TeacherSettings() {
 
     setSaving(true);
 
-    await updateProfile(user, {
-      displayName: name,
-    });
+    try {
+      await updateProfile(user, { displayName: name });
+      await user.reload(); // Met à jour auth.currentUser
+      alert("Nom mis à jour !");
+      window.location.reload(); // 🔹 Recharge la page complète
+    } catch (error) {
+      console.error(error);
+      alert("Erreur lors de la mise à jour du nom.");
+    }
 
     setSaving(false);
-    alert("Nom mis à jour !");
   };
 
   const logout = () => auth.signOut();

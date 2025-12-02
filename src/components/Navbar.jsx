@@ -13,7 +13,6 @@ export default function Navbar() {
 
   const [userName, setUserName] = useState("");
   const [userRole, setUserRole] = useState("");
-
   const [searchText, setSearchText] = useState("");
   const [allUsers, setAllUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
@@ -28,25 +27,35 @@ export default function Navbar() {
   const roleMap = {
     teacher: "Enseignant",
     enseignant: "Enseignant",
-
     admin: "Coordonnateur",
     coordinator: "Coordonnateur",
     coordonator: "Coordonnateur",
     coordonnateur: "Coordonnateur"
   };
 
+  // 🔹 Écoute les changements auth pour afficher le displayName à jour
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) {
-        const data = snap.data();
+      // Priorité au displayName de Firebase Auth
+      if (user.displayName) {
+        setUserName(user.displayName);
+      } else {
+        // Si displayName vide, fallback sur Firestore
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          const fName = formatName(data.firstName);
+          const lName = formatName(data.lastName);
+          setUserName(`${fName} ${lName}`);
+        }
+      }
 
-        const fName = formatName(data.firstName);
-        const lName = formatName(data.lastName);
-        setUserName(`${fName} ${lName}`);
-
+      // Role
+      const snapRole = await getDoc(doc(db, "users", user.uid));
+      if (snapRole.exists()) {
+        const data = snapRole.data();
         const roleKey = data.role?.toLowerCase() || "";
         setUserRole(roleMap[roleKey] || data.role);
       }
