@@ -3,6 +3,7 @@ import TeacherSettings from "./TeacherSettings";
 import Navbar from "../components/Navbar";
 import React, { useEffect, useState } from "react";
 import "./TeacherDashboard.css";
+import { analyzeAnswerWithAI } from "../services/openaiService";
 import { auth, db, storage } from "../firebase";
 import {
   collection,
@@ -121,7 +122,10 @@ export default function TeacherDashboard() {
           const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           setPlans(list);
         } catch (error) {
-          console.error("[ERREUR FIRESTORE] Erreur de chargement des plans:", error.message);
+          console.error(
+            "[ERREUR FIRESTORE] Erreur de chargement des plans:",
+            error.message
+          );
         }
       };
       loadPlans();
@@ -132,31 +136,54 @@ export default function TeacherDashboard() {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
-  const analyzePlan = () => {
+  /* ===== Analyse IA (RÉELLE) ===== */
+  const analyzePlan = async () => {
     if (!formTemplate || !formTemplate.questions) return;
 
-    const feedback = [];
-    let isConform = true;
+    // Indicateur visuel que l'IA travaille (optionnel, mais recommandé)
+    const originalBtnText = document.getElementById("analyze-btn")?.innerText;
+    if (document.getElementById("analyze-btn"))
+      document.getElementById("analyze-btn").innerText = "Analyse en cours...";
 
-    formTemplate.questions.forEach((q) => {
+    const globalSuggestions = [];
+    let hasNonConformity = false;
+    let hasImprovement = false;
+
+    // On boucle sur chaque question pour l'analyser individuellement
+    // Pour éviter trop d'appels simultanés, on utilise une boucle for...of avec await
+    for (const q of formTemplate.questions) {
       const answerText = answers[q.id] || "";
-      if (answerText.length < 10) {
-        isConform = false;
-        feedback.push(`Question "${q.label}" : Réponse trop courte.`);
+      const rule = q.rule || "Aucune règle spécifique.";
+
+      // Appel réel à l'IA
+      const result = await analyzeAnswerWithAI(q.label, rule, answerText);
+
+      // On compile les résultats
+      if (result.status === "Non conforme") hasNonConformity = true;
+      if (result.status === "À améliorer") hasImprovement = true;
+
+      if (result.feedback && result.feedback.length > 0) {
+        // On ajoute le préfixe de la question pour savoir de quoi on parle
+        result.feedback.forEach((f) => {
+          globalSuggestions.push(`[${q.label}] : ${f}`);
+        });
       }
+    }
+
+    // Détermination du statut global
+    let finalStatus = "Conforme";
+    if (hasNonConformity) finalStatus = "Non conforme";
+    else if (hasImprovement) finalStatus = "À améliorer";
+
+    setAnalysis({
+      status: finalStatus,
+      suggestions: globalSuggestions,
     });
 
-    if (isConform) {
-      setAnalysis({
-        status: "Conforme",
-        suggestions: ["Le plan respecte les critères de base."],
-      });
-    } else {
-      setAnalysis({
-        status: "Non conforme",
-        suggestions: feedback,
-      });
-    }
+    // Reset du bouton
+    if (document.getElementById("analyze-btn"))
+      document.getElementById("analyze-btn").innerText =
+        originalBtnText || "Analyser mes réponses (IA)";
   };
 
   const handleSubmitPlan = async () => {
@@ -169,7 +196,9 @@ export default function TeacherDashboard() {
         const userSnap = await getDoc(doc(db, "users", currentUser.uid));
         if (userSnap.exists()) {
           const uData = userSnap.data();
-          teacherName = `${uData.firstName || ""} ${uData.lastName || ""}`.trim();
+          teacherName = `${uData.firstName || ""} ${
+            uData.lastName || ""
+          }`.trim();
         }
       } catch (e) {
         console.error("Erreur récupération user", e);
@@ -536,6 +565,7 @@ export default function TeacherDashboard() {
                     ))}
 
                   <button
+                    id="analyze-btn"
                     type="button"
                     className="btn-primary"
                     onClick={analyzePlan}
