@@ -2,6 +2,18 @@ import React, { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 
+const formatDateTime = (ts) => {
+  if (!ts) return "N/A";
+  const date = ts.toDate ? ts.toDate() : new Date(ts);
+  return date.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 export default function TeacherSubmits() {
   const [submits, setSubmits] = useState([]);
 
@@ -9,6 +21,7 @@ export default function TeacherSubmits() {
     const load = async () => {
       const user = auth.currentUser;
       if (!user) return;
+
       const q = query(
         collection(db, "coursePlans"),
         where("teacherId", "==", user.uid)
@@ -37,8 +50,30 @@ export default function TeacherSubmits() {
                 <h3 className="font-bold text-white">
                   {plan.title || "Sans titre"}
                 </h3>
-                <span className="text-xs text-primary">{plan.status}</span>
+
+                <div className="flex flex-col gap-1">
+                  <span
+                    className={`text-xs font-bold px-2 py-1 rounded inline-block ${
+                      plan.status === "Approuvé"
+                        ? "text-green-400 bg-green-900/20"
+                        : "text-yellow-400 bg-yellow-900/20"
+                    }`}
+                  >
+                    {plan.status}
+                  </span>
+
+                  <span className="text-xs text-dark-muted">
+                    Soumis : {formatDateTime(plan.createdAt)}
+                  </span>
+
+                  {plan.status === "Approuvé" && (
+                    <span className="text-xs text-dark-muted">
+                      Approuvé : {formatDateTime(plan.updatedAt)}
+                    </span>
+                  )}
+                </div>
               </div>
+
               <a
                 href={plan.pdfUrl}
                 target="_blank"

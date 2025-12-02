@@ -1,6 +1,7 @@
+// src/teacher/TeacherDashboard.jsx
 import SidebarTeacher from "./SidebarTeacher";
 import TeacherSettings from "./TeacherSettings";
-import TeacherSubmits from "./TeacherSubmits"; // Ajouté pour l'onglet Remises
+import TeacherSubmits from "./TeacherSubmits"; // Onglet Remises
 import Navbar from "../components/Navbar";
 import React, { useEffect, useState } from "react";
 import { analyzeAnswerWithAI } from "../services/openaiService";
@@ -11,7 +12,6 @@ import {
   query,
   where,
   getDocs,
-  getDoc,
   serverTimestamp,
   deleteDoc,
   doc,
@@ -22,13 +22,22 @@ import {
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { jsPDF } from "jspdf";
 
-const formatDateTime = (ts) =>
-  ts ? ts.toDate().toLocaleDateString("fr-FR") : "N/A";
+// Format date + heure
+const formatDateTime = (ts) => {
+  if (!ts) return "N/A";
+  const date = ts.toDate ? ts.toDate() : new Date(ts);
+  return date.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 export default function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState("new");
   const [plans, setPlans] = useState([]);
-  const [templates, setTemplates] = useState([]);
   const [formTemplate, setFormTemplate] = useState(null);
   const [answers, setAnswers] = useState({});
   const [analysis, setAnalysis] = useState(null);
@@ -36,6 +45,7 @@ export default function TeacherDashboard() {
   const [editingPlan, setEditingPlan] = useState(null);
   const currentUser = auth.currentUser;
 
+  // Charger les plans du prof
   useEffect(() => {
     if (activeTab === "plans" && currentUser) {
       const q = query(
@@ -49,6 +59,7 @@ export default function TeacherDashboard() {
     }
   }, [activeTab, currentUser]);
 
+  // Charger le formulaire
   useEffect(() => {
     const loadForm = async () => {
       if (editingPlan) {
@@ -101,7 +112,7 @@ export default function TeacherDashboard() {
     if (!analysis) return alert("Analyse requise");
     setSubmitting(true);
 
-    // PDF
+    // Création PDF
     const docPDF = new jsPDF();
     docPDF.text("PLAN DE COURS", 10, 10);
     formTemplate.questions.forEach((q, i) => {
@@ -132,12 +143,11 @@ export default function TeacherDashboard() {
       answers,
       status: editingPlan?.status === "Approuvé" ? "En révision" : "Soumis",
       pdfUrl,
+      coordinatorComments: editingPlan?.coordinatorComments || [],
     };
 
     if (editingPlan)
-      await setDoc(doc(db, "coursePlans", editingPlan.id), data, {
-        merge: true,
-      });
+      await setDoc(doc(db, "coursePlans", editingPlan.id), data, { merge: true });
     else await addDoc(collection(db, "coursePlans"), data);
 
     alert("Sauvegardé !");
@@ -162,23 +172,28 @@ export default function TeacherDashboard() {
                     key={p.id}
                     className="card-modern hover:border-primary transition-colors flex flex-col"
                   >
-                    <h3 className="text-xl font-bold text-white mb-2">
-                      {p.title}
-                    </h3>
-                    <div className="flex justify-between items-center mb-4 text-sm">
+                    <h3 className="text-xl font-bold text-white mb-2">{p.title}</h3>
+                    <div className="flex flex-col mb-4 text-sm gap-1">
                       <span className="text-dark-muted">
-                        {formatDateTime(p.createdAt)}
+                        Soumis le: {formatDateTime(p.createdAt)}
                       </span>
-                      <span
-                        className={`px-2 py-1 rounded font-bold ${
-                          p.status === "Approuvé"
-                            ? "text-green-400 bg-green-900/20"
-                            : "text-orange-400 bg-orange-900/20"
-                        }`}
-                      >
-                        {p.status}
-                      </span>
+                      {p.status === "Approuvé" && (
+                        <span className="text-dark-muted">
+                          Approuvé le: {formatDateTime(p.updatedAt)}
+                        </span>
+                      )}
                     </div>
+                    <span
+                      className={`px-2 py-1 rounded font-bold mb-2 ${
+                        p.status === "Approuvé"
+                          ? "text-green-400 bg-green-900/20"
+                          : p.status === "Soumis"
+                          ? "text-orange-400 bg-orange-900/20"
+                          : "text-red-400 bg-red-900/20"
+                      }`}
+                    >
+                      {p.status}
+                    </span>
                     <div className="mt-auto flex gap-2 pt-4 border-t border-dark-border">
                       <a
                         href={p.pdfUrl}
@@ -224,26 +239,27 @@ export default function TeacherDashboard() {
                 {!formTemplate ? (
                   <p>Aucun formulaire actif.</p>
                 ) : (
-                  <form
-                    onSubmit={(e) => e.preventDefault()}
-                    className="space-y-6"
-                  >
+                  <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
                     {formTemplate.questions.map((q, i) => (
                       <div key={q.id}>
                         <label className="block text-lg font-medium text-white mb-2">
                           {i + 1}. {q.label}
                         </label>
-                        <p className="text-sm text-primary mb-2 italic">
-                          ℹ️ {q.rule}
-                        </p>
+                        <p className="text-sm text-primary mb-2 italic">ℹ️ {q.rule}</p>
                         <textarea
                           className="input-modern min-h-[100px]"
                           value={answers[q.id] || ""}
-                          onChange={(e) =>
-                            handleInputChange(q.id, e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(q.id, e.target.value)}
                           placeholder="Votre réponse..."
                         />
+                        {/* Coordinator comments */}
+                        {editingPlan?.coordinatorComments
+                          ?.filter((c) => c.questionId === q.id)
+                          .map((c, idx) => (
+                            <p key={idx} className="text-yellow-400 italic text-sm mt-1">
+                              💬 Commentaire du coordo: {c.comment}
+                            </p>
+                          ))}
                       </div>
                     ))}
                     <div className="flex gap-4 pt-4">
