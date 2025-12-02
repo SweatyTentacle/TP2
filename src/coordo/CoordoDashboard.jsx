@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import SidebarCoordo from "./SidebarCoordo";
 import ManageForms from "./ManageForms";
 import ValidatePlans from "./ValidatePlans";
+import CoordoSettings from "./CoordoSettings";
 import "../teacher/TeacherDashboard.css"; // Réutilisation du CSS
 
 export default function CoordoDashboard() {
@@ -18,6 +19,7 @@ export default function CoordoDashboard() {
         <div className="dashboard-content">
           {activeTab === "forms" && <ManageForms />}
           {activeTab === "validate" && <ValidatePlans />}
+          {activeTab === "settings" && <CoordoSettings />}
         </div>
       </div>
     </>
