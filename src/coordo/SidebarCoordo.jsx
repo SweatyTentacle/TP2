@@ -18,7 +18,7 @@ export default function SidebarCoordo({ activeTab, setActiveTab }) {
           onClick={() => setActiveTab(item.id)}
           className={`w-full text-left px-4 py-3 rounded-xl transition-all font-medium ${
             activeTab === item.id
-              ? "bg-purple-600 text-white shadow-lg"
+              ? "bg-purple-600 text-white shadow-lg shadow-purple-900/20"
               : "text-dark-muted hover:bg-dark-bg hover:text-white"
           }`}
         >
