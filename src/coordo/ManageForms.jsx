@@ -230,10 +230,10 @@ export default function ManageForms() {
   // Supprimer un template
   const deleteTemplate = async (templateId) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce modèle ?")) return;
-    if (userRole !== 'coordonator' && userRole !== 'teacher') return alert("Action non autorisée."); 
+    if (userRole !== 'coordonator' && userRole !== 'teacher') return alert("Action non autorisée.");
     try {
       await deleteDoc(doc(db, "formTemplates", templateId));
-      setTemplatesList(templatesList.filter(t => t.id !== templateId)); 
+      setTemplatesList(templatesList.filter(t => t.id !== templateId));
       if (activeFormId === templateId) { setCoursePlan(defaultCoursePlan()); setActiveFormId(null); }
       alert("Modèle supprimé avec succès !");
     } catch (e) {
