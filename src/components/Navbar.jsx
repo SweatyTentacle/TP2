@@ -3,6 +3,7 @@ import { auth, db } from "../firebase";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+import exitIcon from "../assets/exit.png";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -23,9 +24,11 @@ export default function Navbar() {
         }
       }
     });
+
     getDocs(collection(db, "users")).then((snap) =>
       setAllUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
     );
+
     return unsub;
   }, []);
 
@@ -34,6 +37,7 @@ export default function Navbar() {
       setFilteredUsers([]);
       return;
     }
+
     setFilteredUsers(
       allUsers.filter((u) =>
         `${u.firstName} ${u.lastName}`
@@ -45,9 +49,13 @@ export default function Navbar() {
 
   return (
     <nav className="h-16 bg-dark-card border-b border-dark-border flex items-center justify-between px-6 sticky top-0 z-50">
+      
+      {/* LOGO */}
       <div className="text-xl font-bold text-primary tracking-wide">
         EnseignIA
       </div>
+
+      {/* SEARCH */}
       <div className="relative hidden md:block w-96">
         <input
           type="text"
@@ -56,6 +64,7 @@ export default function Navbar() {
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
         />
+
         {filteredUsers.length > 0 && (
           <div className="absolute top-12 left-0 w-full bg-dark-card border border-dark-border rounded-xl shadow-2xl overflow-hidden z-50">
             {filteredUsers.map((u) => (
@@ -66,6 +75,7 @@ export default function Navbar() {
                 <span className="font-bold">
                   {u.firstName} {u.lastName}
                 </span>
+
                 <span className="ml-2 text-xs text-dark-muted px-2 py-0.5 bg-dark-bg rounded-full border border-dark-border">
                   {u.role}
                 </span>
@@ -74,19 +84,24 @@ export default function Navbar() {
           </div>
         )}
       </div>
+
+      {/* USER + LOGOUT */}
       <div className="flex items-center gap-4">
+        
         <div className="text-right hidden sm:block">
           <div className="text-sm font-semibold text-white">{userName}</div>
           <div className="text-xs text-dark-muted">{userRole}</div>
         </div>
+
+        {/* LOGOUT ICON ONLY */}
         <button
           onClick={() => {
             auth.signOut();
             navigate("/login");
           }}
-          className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-2 rounded-lg transition-colors"
+          className="bg-red-500/10 hover:bg-red-500/20 p-2 rounded-lg transition-colors"
         >
-          Sortir
+          <img src={exitIcon} alt="logout" className="w-5 h-5" />
         </button>
       </div>
     </nav>
