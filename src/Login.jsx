@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import maisonneuve from "./assets/maisonneuve.jpg";
+import googleLogo from "./assets/Google.PNG";
+
 import { auth, db } from "./firebase";
 import {
   signInWithEmailAndPassword,
@@ -24,10 +26,13 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) return alert("Remplissez tous les champs.");
+
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "users", cred.user.uid));
+
       if (!snap.exists()) return alert("Compte introuvable.");
+
       navigateBasedOnRole(snap.data().role);
     } catch (err) {
       console.error(err);
@@ -40,6 +45,7 @@ export default function Login() {
       const result = await signInWithPopup(auth, new GoogleAuthProvider());
       const userRef = doc(db, "users", result.user.uid);
       const snap = await getDoc(userRef);
+
       let finalRole = role;
 
       if (snap.exists()) {
@@ -54,6 +60,7 @@ export default function Login() {
           createdAt: new Date(),
         });
       }
+
       navigateBasedOnRole(finalRole);
     } catch (err) {
       console.error(err);
@@ -63,13 +70,17 @@ export default function Login() {
 
   return (
     <div className="flex h-screen w-full bg-dark-bg text-dark-text overflow-hidden">
+      
+      {/* LEFT IMAGE PANEL */}
       <div className="hidden lg:flex w-1/2 relative items-center justify-center">
         <div className="absolute inset-0 bg-blue-900/40 z-10 mix-blend-multiply"></div>
+
         <img
           src={maisonneuve}
           alt="Campus"
           className="w-full h-full object-cover"
         />
+
         <div className="absolute bottom-10 left-10 z-20 bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10">
           <h1 className="text-4xl font-bold text-white mb-2">EnseignIA</h1>
           <p className="text-gray-200 text-lg">
@@ -77,12 +88,17 @@ export default function Login() {
           </p>
         </div>
       </div>
+
+      {/* LOGIN PANEL */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md space-y-8">
+
           <div className="text-center">
             <h2 className="text-3xl font-bold text-white mb-2">Connexion</h2>
             <p className="text-dark-muted">Accédez à votre espace</p>
           </div>
+
+          {/* ROLE SELECTION */}
           <div className="flex bg-dark-card p-1 rounded-xl border border-dark-border">
             {["teacher", "coordonator"].map((r) => (
               <button
@@ -98,6 +114,8 @@ export default function Login() {
               </button>
             ))}
           </div>
+
+          {/* FORM */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <input
               type="email"
@@ -107,6 +125,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+
             <input
               type="password"
               placeholder="Mot de passe"
@@ -115,10 +134,13 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+
             <button type="submit" className="w-full btn-primary py-3 text-lg">
               Se connecter
             </button>
           </form>
+
+          {/* SEPARATOR */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-dark-border"></div>
@@ -127,21 +149,31 @@ export default function Login() {
               <span className="px-2 bg-dark-bg text-dark-muted">OU</span>
             </div>
           </div>
+
+          {/* GOOGLE LOGIN BUTTON — FINAL VERSION */}
           <button
             onClick={handleGoogleLogin}
-            className="w-full py-3 bg-white text-gray-900 font-bold rounded-xl hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 bg-white text-gray-900 font-semibold rounded-xl hover:bg-gray-100 transition-colors flex items-center justify-center gap-3"
           >
-            <span className="text-xl">G</span> Continuer avec Google
+            <img
+              src={googleLogo}
+              alt="Google"
+              className="w-6 h-6"
+            />
+            <span className="text-base font-medium">Continuer avec Google</span>
           </button>
+
+          {/* REGISTER LINK */}
           <p className="text-center text-dark-muted">
-            Pas de compte ?{" "}
+            Vous n'avez pas de compte ?{" "}
             <span
               onClick={() => navigate("/register")}
               className="text-primary hover:text-blue-400 cursor-pointer underline"
             >
-              S'inscrire
+             Inscrivez-vous
             </span>
           </p>
+
         </div>
       </div>
     </div>

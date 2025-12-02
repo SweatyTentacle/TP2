@@ -184,9 +184,9 @@ export default function Register() {
 
           {/* Link */}
           <p className="text-center text-dark-muted">
-            Déjà un compte ?{" "}
+            Vouz avez un compte ?{" "}
             <span onClick={() => navigate("/login")} className="text-primary cursor-pointer hover:underline">
-              Connexion
+              Connectez-vous
             </span>
           </p>
 
