@@ -73,14 +73,14 @@ export default function ValidatePlans() {
   );
 
   const normalize = (s) => (s || "").toString().trim().toLowerCase();
-  const countSubmitted = filteredPlans.filter(
-    (p) => normalize(p.status) === "Soumis"
+  const countSubmitted = plans.filter(
+    (p) => normalize(p.status) === "soumis"
   ).length;
-  const countToCorrect = filteredPlans.filter(
-    (p) => normalize(p.status) === "À corriger"
+  const countToCorrect = plans.filter(
+    (p) => normalize(p.status) === "à corriger"
   ).length;
-  const countApproved = filteredPlans.filter(
-    (p) => normalize(p.status) === "Approuvé"
+  const countApproved = plans.filter(
+    (p) => normalize(p.status) === "approuvé"
   ).length;
 
   // --- ANALYSE IA CÔTÉ COORDO ---

@@ -571,15 +571,17 @@ export default function TeacherDashboard() {
                           >
                             PDF
                           </a>
-                          <button
-                            onClick={() => {
-                              setEditingPlan(p);
-                              setActiveTab("new");
-                            }}
-                            className="text-blue-400 text-sm px-4 py-2 bg-blue-900/20 rounded-lg"
-                          >
-                            Modifier
-                          </button>
+                          {p.status !== "Approuvé" && (
+                            <button
+                              onClick={() => {
+                                setEditingPlan(p);
+                                setActiveTab("new");
+                              }}
+                              className="text-blue-400 text-sm px-4 py-2 bg-blue-900/20 rounded-lg"
+                            >
+                              Modifier
+                            </button>
+                          )}
                           <button
                             onClick={() => setShowDeleteConfirm(p.id)}
                             className="text-red-400 text-sm px-4 py-2 bg-red-900/20 rounded-lg hover:bg-red-900/40"
