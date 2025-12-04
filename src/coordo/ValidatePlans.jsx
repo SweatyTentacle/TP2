@@ -10,6 +10,7 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
+import { analyzeAnswerWithAI } from "../services/openaiService"; // Import du service AI
 
 export default function ValidatePlans() {
   const [plans, setPlans] = useState([]);
@@ -19,94 +20,165 @@ export default function ValidatePlans() {
   const [filterTeacher, setFilterTeacher] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
+  // Chargement initial des plans
   const loadPlans = async () => {
-    const q = query(
-      collection(db, "coursePlans"),
-      orderBy("createdAt", "desc")
-    );
-    const snap = await getDocs(q);
-    const plansData = await Promise.all(
-      snap.docs.map(async (d) => {
-        const data = d.data();
-        let teacherName = "Inconnu";
-        if (data.teacherId) {
-          try {
-            const userSnap = await getDoc(doc(db, "users", data.teacherId));
-            if (userSnap.exists()) {
-              const u = userSnap.data();
-              teacherName = u.firstName
-                ? `${u.firstName} ${u.lastName}`
-                : u.email;
+    try {
+      const q = query(
+        collection(db, "coursePlans"),
+        orderBy("createdAt", "desc")
+      );
+      const snap = await getDocs(q);
+      const plansData = await Promise.all(
+        snap.docs.map(async (d) => {
+          const data = d.data();
+          let teacherName = "Inconnu";
+          if (data.teacherId) {
+            try {
+              const userSnap = await getDoc(doc(db, "users", data.teacherId));
+              if (userSnap.exists()) {
+                const u = userSnap.data();
+                teacherName = u.firstName
+                  ? `${u.firstName} ${u.lastName}`
+                  : u.email;
+              }
+            } catch (e) {
+              console.error("Erreur récupération prof", e);
             }
-          } catch (e) { console.error("erreur récupération plan", e); }
-        }
-        return { id: d.id, ...data, teacherName };
-      })
-    );
-    setPlans(plansData);
+          }
+          return { id: d.id, ...data, teacherName };
+        })
+      );
+      setPlans(plansData);
+    } catch (error) {
+      console.error("Erreur chargement plans:", error);
+    }
   };
 
   useEffect(() => {
-    const run = async () => {
-      await loadPlans();
-    };
-  run();
+    loadPlans();
   }, []);
 
+  // Filtres
   const teacherOptions = Array.from(
     new Set(plans.map((p) => p.teacherName).filter(Boolean))
   );
   const statusOptions = Array.from(
     new Set(plans.map((p) => p.status).filter(Boolean))
   );
+
   const filteredPlans = plans.filter(
     (p) =>
       (!filterTeacher || p.teacherName === filterTeacher) &&
       (!filterStatus || p.status === filterStatus)
   );
 
-  // Compteurs par statut (basés sur les plans filtrés). Normaliser les statuts
-  // (trim + lowercase) pour éviter les problèmes de casse / espaces / accents.
   const normalize = (s) => (s || "").toString().trim().toLowerCase();
-  const countSubmitted = filteredPlans.filter((p) => normalize(p.status) === "soumis").length;
-  const countToCorrect = filteredPlans.filter((p) => normalize(p.status) === "à corriger").length;
-  const countApproved = filteredPlans.filter((p) => normalize(p.status) === "approuvé").length;
+  const countSubmitted = filteredPlans.filter(
+    (p) => normalize(p.status) === "soumis"
+  ).length;
+  const countToCorrect = filteredPlans.filter(
+    (p) => normalize(p.status) === "à corriger"
+  ).length;
+  const countApproved = filteredPlans.filter(
+    (p) => normalize(p.status) === "approuvé"
+  ).length;
 
+  // --- ANALYSE IA CÔTÉ COORDO ---
   const loadAiResults = async (plan) => {
+    setSelectedPlan(plan);
+    setComment(plan.coordinatorComment || "");
+
+    // Si l'analyse a déjà été faite et sauvegardée dans le plan, on ne la refait pas
+    if (plan.aiValidation) {
+      return;
+    }
+
     setAiLoading(true);
     try {
-      let aiData = plan.aiValidation || null;
-      if (!aiData) {
-        const aiRef = doc(db, "coursePlans", plan.id, "meta", "aiValidation");
-        const aiSnap = await getDoc(aiRef);
-        if (aiSnap.exists()) aiData = aiSnap.data();
+      const suggestions = [];
+      let isConform = true;
+
+      // On récupère le template lié pour avoir les règles
+      if (plan.formId) {
+        const tmplSnap = await getDoc(doc(db, "formTemplates", plan.formId));
+        if (tmplSnap.exists()) {
+          const template = tmplSnap.data();
+
+          // Analyse des questions
+          if (template.questions && template.questions.length > 0) {
+            const aiPromises = template.questions.map(async (q) => {
+              const answer = plan.answers ? plan.answers[q.id] : "";
+              if (q.rule && q.rule.trim().length > 0) {
+                const result = await analyzeAnswerWithAI(
+                  q.label,
+                  q.rule,
+                  answer || ""
+                );
+                if (result.status !== "Conforme") {
+                  return result.feedback.map((f) => `[${q.label}] ${f}`);
+                }
+              } else if (!answer || !answer.trim()) {
+                return [`[${q.label}] Réponse manquante.`];
+              }
+              return [];
+            });
+
+            const results = await Promise.all(aiPromises);
+            results.flat().forEach((msg) => {
+              suggestions.push(msg);
+              isConform = false;
+            });
+          }
+        }
       }
-      setSelectedPlan({ ...plan, aiValidation: aiData });
-      setComment(plan.coordinatorComment || "");
+
+      const aiResult = {
+        status: isConform ? "Conforme" : "À améliorer",
+        recommendations:
+          suggestions.length > 0
+            ? suggestions
+            : ["Aucun problème détecté par l'IA."],
+      };
+
+      // Mise à jour locale + Firestore pour ne pas recalculer à chaque fois
+      setSelectedPlan((prev) => ({ ...prev, aiValidation: aiResult }));
+
+      // Optionnel : Sauvegarder le résultat IA dans le plan pour le futur
+      await updateDoc(doc(db, "coursePlans", plan.id), {
+        aiValidation: aiResult,
+      });
     } catch (e) {
-      console.error("erreur récupération AI", e);
-      setSelectedPlan(plan);
+      console.error("Erreur analyse IA Coordo:", e);
+    } finally {
+      setAiLoading(false);
     }
-    setAiLoading(false);
   };
 
   const handleUpdateStatus = async (status) => {
-    await updateDoc(doc(db, "coursePlans", selectedPlan.id), {
-      status,
-      coordinatorComment: comment,
-      updatedAt: serverTimestamp(),
-      coordinatorId: auth.currentUser?.uid,
-      approvedAt: status === "Approuvé" ? serverTimestamp() : null,
-    });
-    alert(`Plan marqué comme : ${status}`);
-    setSelectedPlan(null);
-    loadPlans();
+    if (!selectedPlan) return;
+    try {
+      await updateDoc(doc(db, "coursePlans", selectedPlan.id), {
+        status,
+        coordinatorComment: comment,
+        updatedAt: serverTimestamp(),
+        coordinatorId: auth.currentUser?.uid,
+        approvedAt: status === "Approuvé" ? serverTimestamp() : null,
+      });
+      alert(`Plan marqué comme : ${status}`);
+      setSelectedPlan(null);
+      loadPlans();
+    } catch (e) {
+      console.error("Erreur mise à jour statut:", e);
+      alert("Erreur lors de la mise à jour.");
+    }
   };
 
   const getAiCommentText = (ai) => {
     if (!ai) return null;
-    if (ai.recommendations?.length) return ai.recommendations.join("\n");
-    return null;
+    if (ai.recommendations && Array.isArray(ai.recommendations)) {
+      return ai.recommendations.join("\n");
+    }
+    return "Aucune donnée.";
   };
 
   return (
@@ -194,21 +266,25 @@ export default function ValidatePlans() {
               </tbody>
             </table>
           </div>
-          
+
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-700 text-center">
               <div className="text-xs text-slate-400">Soumis</div>
-              <div className="text-2xl font-bold text-yellow-300">{countSubmitted}</div>
+              <div className="text-2xl font-bold text-yellow-300">
+                {countSubmitted}
+              </div>
             </div>
-
             <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-700 text-center">
               <div className="text-xs text-slate-400">À corriger</div>
-              <div className="text-2xl font-bold text-orange-300">{countToCorrect}</div>
+              <div className="text-2xl font-bold text-orange-300">
+                {countToCorrect}
+              </div>
             </div>
-
             <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-700 text-center">
               <div className="text-xs text-slate-400">Approuvé</div>
-              <div className="text-2xl font-bold text-green-300">{countApproved}</div>
+              <div className="text-2xl font-bold text-green-300">
+                {countApproved}
+              </div>
             </div>
           </div>
         </div>
@@ -220,6 +296,7 @@ export default function ValidatePlans() {
           >
             ← Retour
           </button>
+
           <div className="flex justify-between items-start border-b border-slate-700 pb-6 mb-6">
             <div>
               <h2 className="text-3xl font-bold text-white">
@@ -233,6 +310,7 @@ export default function ValidatePlans() {
             <a
               href={selectedPlan.pdfUrl}
               target="_blank"
+              rel="noreferrer"
               className="btn-primary"
             >
               Voir le PDF
@@ -240,37 +318,61 @@ export default function ValidatePlans() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700">
-              <h3 className="text-lg font-bold text-purple-400 mb-4">
-                Analyse IA
+            {/* Colonne Gauche : Analyse IA */}
+            <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700 h-fit">
+              <h3 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
+                ✨ Analyse IA
+                {aiLoading && (
+                  <span className="text-xs text-slate-500 animate-pulse">
+                    (Analyse en cours...)
+                  </span>
+                )}
               </h3>
+
               {aiLoading ? (
-                <p>Chargement...</p>
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-2"></div>
+                  <p className="text-slate-400 text-sm">
+                    L'IA analyse le plan...
+                  </p>
+                </div>
               ) : (
-                <div className="text-slate-300 text-sm space-y-2 whitespace-pre-wrap">
-                  {getAiCommentText(selectedPlan.aiValidation) ||
-                    "Pas de données IA disponibles."}
+                <div
+                  className={`text-sm p-4 rounded-lg border ${
+                    selectedPlan.aiValidation?.status === "Conforme"
+                      ? "bg-green-900/20 border-green-500/30 text-green-100"
+                      : "bg-red-900/20 border-red-500/30 text-red-100"
+                  }`}
+                >
+                  <div className="font-bold mb-2">
+                    Statut : {selectedPlan.aiValidation?.status || "Inconnu"}
+                  </div>
+                  <div className="whitespace-pre-wrap text-slate-300 text-xs leading-relaxed">
+                    {getAiCommentText(selectedPlan.aiValidation)}
+                  </div>
                 </div>
               )}
             </div>
+
+            {/* Colonne Droite : Validation Humaine */}
             <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700">
               <h3 className="text-lg font-bold text-white mb-4">Validation</h3>
               <textarea
                 className="input-modern min-h-[150px] mb-4"
-                placeholder="Commentaire..."
+                placeholder="Ajouter un commentaire pour l'enseignant..."
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
               />
               <div className="flex gap-3">
                 <button
                   onClick={() => handleUpdateStatus("Approuvé")}
-                  className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg font-bold"
+                  className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-green-900/20"
                 >
                   Approuver
                 </button>
                 <button
                   onClick={() => handleUpdateStatus("À corriger")}
-                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2 rounded-lg font-bold"
+                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-orange-900/20"
                 >
                   Demander correction
                 </button>

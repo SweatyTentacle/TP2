@@ -5,15 +5,18 @@ export const analyzeAnswerWithAI = async (
   rule,
   studentAnswer
 ) => {
+  // 1. Vérification de la configuration
   if (!API_KEY) {
-    console.error("Clé API OpenAI manquante !");
+    console.error("Clé API OpenAI manquante dans le fichier .env !");
     return {
       status: "Erreur",
-      feedback: ["Configuration manquante : Clé API non trouvée."],
+      feedback: [
+        "La clé API OpenAI n'est pas configurée (VITE_OPENAI_API_KEY).",
+      ],
     };
   }
 
-  // Si la réponse est vide, pas besoin de payer l'IA
+  // 2. Si pas de réponse, échec immédiat (économise l'appel API)
   if (!studentAnswer || studentAnswer.trim().length === 0) {
     return {
       status: "Non conforme",
@@ -21,17 +24,34 @@ export const analyzeAnswerWithAI = async (
     };
   }
 
-  const prompt = `
-    Tu es un assistant pédagogique expert.
-    Voici une question de plan de cours : "${questionLabel}"
-    Voici la règle de validation imposée par le coordonnateur : "${rule}"
-    Voici la réponse de l'enseignant : "${studentAnswer}"
+  // 3. Si pas de règle, on considère que c'est bon (ou on demande une précision)
+  if (!rule || rule.trim().length === 0) {
+    return {
+      status: "Conforme",
+      feedback: ["Aucune règle spécifique définie pour cette question."],
+    };
+  }
 
-    Analyse si la réponse respecte la règle.
-    Réponds UNIQUEMENT au format JSON strict suivant, sans texte avant ni après :
+  // 4. Construction du prompt pour l'IA
+  const prompt = `
+    Tu es un assistant pédagogique expert chargé de valider des plans de cours.
+    
+    CONTEXTE:
+    - Question : "${questionLabel}"
+    - Réponse de l'enseignant : "${studentAnswer}"
+    - Règle de validation stricte : "${rule}"
+
+    TÂCHE:
+    Analyse si la réponse respecte la règle imposée.
+    Sois strict mais constructif.
+
+    FORMAT DE RÉPONSE ATTENDU (JSON pur uniquement):
     {
-      "status": "Conforme" | "À améliorer" | "Non conforme",
-      "feedback": ["point positif 1", "suggestion d'amélioration 1", "erreur 1"]
+      "status": "Conforme" ou "À améliorer",
+      "feedback": [
+        "Phrase courte expliquant le problème (si applicable)",
+        "Suggestion concrète pour respecter la règle (si applicable)"
+      ]
     }
   `;
 
@@ -43,9 +63,12 @@ export const analyzeAnswerWithAI = async (
         Authorization: `Bearer ${API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-3.5-turbo", // ou "gpt-4o-mini" (moins cher et rapide)
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3, // Faible température pour des réponses plus constantes
+        model: "gpt-3.5-turbo", // Modèle rapide et efficace
+        messages: [
+          { role: "system", content: "Tu es un validateur JSON strict." },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.2, // Faible créativité pour une validation constante
       }),
     });
 
@@ -57,7 +80,7 @@ export const analyzeAnswerWithAI = async (
 
     const content = data.choices[0].message.content;
 
-    // Nettoyage pour s'assurer qu'on a bien que du JSON (parfois l'IA ajoute des ```json ... ```)
+    // Nettoyage de la réponse (au cas où l'IA ajoute des balises markdown)
     const jsonString = content
       .replace(/```json/g, "")
       .replace(/```/g, "")

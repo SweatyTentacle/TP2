@@ -4,6 +4,7 @@ import TeacherSettings from "./TeacherSettings";
 import TeacherSubmits from "./TeacherSubmits";
 import Navbar from "../components/Navbar";
 import "./TeacherDashboard.css";
+import { analyzeAnswerWithAI } from "../services/openaiService"; // Import du service IA
 
 import { auth, db, storage } from "../firebase";
 import {
@@ -38,7 +39,6 @@ const generatePDF = (planData, teacherName) => {
   const contentWidth = pageWidth - margin * 2;
 
   // --- LOGIQUE TITRE ---
-  // Trouver le titre dans les réponses si une question s'appelle "Titre"
   let courseTitle = planData.title || "Plan de cours";
   const titleQuestion = (planData.questionsSnapshot || []).find(
     (q) => q.label.toLowerCase() === "titre"
@@ -54,7 +54,7 @@ const generatePDF = (planData, teacherName) => {
   doc.text("PLAN DE COURS", margin, y);
   y += 10;
 
-  // 2. Bloc Info (Enseignant, Formulaire, etc)
+  // 2. Bloc Info
   doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
 
@@ -62,12 +62,12 @@ const generatePDF = (planData, teacherName) => {
   doc.setFont("helvetica", "bold");
   doc.text(`Enseignant:`, margin, y);
   doc.setFont("helvetica", "normal");
-  doc.text(teacherName, margin + 25, y); // Affiche le NOM, pas l'email
+  doc.text(teacherName, margin + 25, y);
   y += 6;
   doc.setFont("helvetica", "bold");
   doc.text(`Formulaire:`, margin, y);
   doc.setFont("helvetica", "normal");
-  doc.text(courseTitle, margin + 25, y); // Affiche le Titre du cours
+  doc.text(courseTitle, margin + 25, y);
 
   // Droite
   y -= 6;
@@ -86,27 +86,23 @@ const generatePDF = (planData, teacherName) => {
   doc.text("Analysé", pageWidth - margin, y, { align: "right" });
 
   y += 15;
-  // Ligne de séparation
   doc.setDrawColor(200, 200, 200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 10;
 
-  // Fonction helper pour ajouter une section stylisée
+  // Fonction helper pour sections
   const addSection = (title, content, color = BLUE) => {
-    // Nouvelle page si nécessaire
     if (y > 260) {
       doc.addPage();
       y = 20;
     }
 
-    // Titre de la section
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(...color);
     doc.text(title, margin, y);
     y += 5;
 
-    // Contenu dans boîte grise
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(...TEXT_COLOR);
@@ -117,7 +113,6 @@ const generatePDF = (planData, teacherName) => {
     );
     const boxHeight = splitText.length * 5 + 12;
 
-    // Vérif saut de page pour la boîte
     if (y + boxHeight > 280) {
       doc.addPage();
       y = 20;
@@ -127,22 +122,17 @@ const generatePDF = (planData, teacherName) => {
       y += 5;
     }
 
-    // Fond gris
     doc.setFillColor(...GRAY_BG);
     doc.rect(margin, y, contentWidth, boxHeight, "F");
-
-    // Barre colorée à gauche
     doc.setDrawColor(...color);
     doc.setLineWidth(1.5);
     doc.line(margin, y, margin, y + boxHeight);
-
-    // Texte
     doc.text(splitText, margin + 4, y + 8);
 
-    y += boxHeight + 8; // Espace après la section
+    y += boxHeight + 8;
   };
 
-  // Helper pour Titres de Section Principale
+  // Helper Headers
   const addMainHeader = (text, color = TEAL) => {
     if (y > 260) {
       doc.addPage();
@@ -155,9 +145,9 @@ const generatePDF = (planData, teacherName) => {
     y += 10;
   };
 
-  // --- RENDU DES DONNÉES ---
+  // --- RENDU ---
 
-  // 1. Meta Fields (Description, etc, sauf titre)
+  // Meta Fields
   const meta = planData.metaValuesSnapshot || {};
   Object.keys(meta).forEach((key) => {
     if (key !== "title" && meta[key]) {
@@ -165,21 +155,19 @@ const generatePDF = (planData, teacherName) => {
     }
   });
 
-  // 2. Questions (Filtre "Titre", re-numérotation)
+  // Questions
   const questionsToRender = (planData.questionsSnapshot || []).filter(
     (q) => q.label.toLowerCase() !== "titre"
   );
 
   questionsToRender.forEach((q, idx) => {
     const answer = planData.answers[q.id] || "";
-    // idx + 1 car on re-numérote après avoir retiré le titre
     addSection(`Question ${idx + 1}: ${q.label}`, answer, BLUE);
   });
 
-  // 3. Semaines (Couleur TEAL pour différencier)
+  // Semaines
   if (planData.weeksSnapshot && planData.weeksSnapshot.length > 0) {
     addMainHeader("Planification Hebdomadaire", TEAL);
-
     planData.weeksSnapshot.forEach((w) => {
       const text = `Apprentissage: ${w.learning || ""}\nDevoirs: ${
         w.homework || ""
@@ -188,10 +176,9 @@ const generatePDF = (planData, teacherName) => {
     });
   }
 
-  // 4. Évaluations (Couleur TEAL)
+  // Évaluations
   if (planData.examsSnapshot && planData.examsSnapshot.length > 0) {
     addMainHeader("Évaluations", TEAL);
-
     planData.examsSnapshot.forEach((ex, idx) => {
       const title = ex.title || `Évaluation ${idx + 1}`;
       const text = `Date: ${ex.date || "À déterminer"}\nMatière: ${
@@ -201,7 +188,7 @@ const generatePDF = (planData, teacherName) => {
     });
   }
 
-  // --- PAGINATION (Footer) ---
+  // Pagination
   const pageCount = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -226,6 +213,7 @@ export default function TeacherDashboard() {
   const [answers, setAnswers] = useState({});
   const [analysis, setAnalysis] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // État pour l'analyse IA
   const [editingPlan, setEditingPlan] = useState(null);
 
   // Listes
@@ -234,14 +222,14 @@ export default function TeacherDashboard() {
   const [planWeeks, setPlanWeeks] = useState([]);
   const [planExams, setPlanExams] = useState([]);
 
-  // Modal Suppression
+  // Modal
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   // User Info
   const [teacherFullName, setTeacherFullName] = useState("");
   const currentUser = auth.currentUser;
 
-  // 1. Fetch User Name on Mount
+  // 1. Fetch User
   useEffect(() => {
     const fetchUserName = async () => {
       if (currentUser) {
@@ -249,16 +237,15 @@ export default function TeacherDashboard() {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
-            if (data.firstName && data.lastName) {
-              setTeacherFullName(`${data.firstName} ${data.lastName}`);
-            } else {
-              setTeacherFullName(currentUser.email);
-            }
+            setTeacherFullName(
+              data.firstName && data.lastName
+                ? `${data.firstName} ${data.lastName}`
+                : currentUser.email
+            );
           } else {
-            setTeacherFullName(currentUser.displayName || currentUser.email);
+            setTeacherFullName(currentUser.email);
           }
         } catch (e) {
-          console.error("Erreur fetch user:", e);
           setTeacherFullName(currentUser.email);
         }
       }
@@ -266,7 +253,7 @@ export default function TeacherDashboard() {
     fetchUserName();
   }, [currentUser]);
 
-  // 2. Charger MES plans
+  // 2. Charger Plans
   useEffect(() => {
     if (activeTab === "plans" && currentUser) {
       const load = async () => {
@@ -282,14 +269,14 @@ export default function TeacherDashboard() {
           );
           setPlans(rows);
         } catch (e) {
-          console.error("Erreur chargement plans:", e);
+          console.error(e);
         }
       };
       load();
     }
   }, [activeTab, currentUser]);
 
-  // 3. Charger les Modèles
+  // 3. Charger Templates
   useEffect(() => {
     if (activeTab === "new") {
       const load = async () => {
@@ -304,7 +291,7 @@ export default function TeacherDashboard() {
     }
   }, [activeTab]);
 
-  // 4. Gérer la sélection / édition
+  // 4. Sélection/Édition
   useEffect(() => {
     if (activeTab !== "new") return;
 
@@ -344,7 +331,6 @@ export default function TeacherDashboard() {
 
   const handleAnswerChange = (qId, val) =>
     setAnswers((prev) => ({ ...prev, [qId]: val }));
-
   const addWeek = () =>
     setPlanWeeks((prev) => [
       ...prev,
@@ -362,11 +348,10 @@ export default function TeacherDashboard() {
         .map((w, i) => ({ ...w, label: `Semaine ${i + 1}` }))
     );
   const updateWeek = (idx, field, val) => {
-    const newWeeks = [...planWeeks];
-    newWeeks[idx][field] = val;
-    setPlanWeeks(newWeeks);
+    const n = [...planWeeks];
+    n[idx][field] = val;
+    setPlanWeeks(n);
   };
-
   const addExam = () =>
     setPlanExams((prev) => [
       ...prev,
@@ -375,9 +360,9 @@ export default function TeacherDashboard() {
   const removeExam = (idx) =>
     setPlanExams((prev) => prev.filter((_, i) => i !== idx));
   const updateExam = (idx, field, val) => {
-    const newExams = [...planExams];
-    newExams[idx][field] = val;
-    setPlanExams(newExams);
+    const n = [...planExams];
+    n[idx][field] = val;
+    setPlanExams(n);
   };
 
   const handleDeletePlan = async (planId) => {
@@ -386,19 +371,64 @@ export default function TeacherDashboard() {
       setPlans((prev) => prev.filter((p) => p.id !== planId));
       setShowDeleteConfirm(null);
     } catch (e) {
-      console.error(e);
-      alert("Erreur lors de la suppression.");
+      alert("Erreur suppression");
     }
   };
 
-  const analyzePlan = () => {
-    setAnalysis({
-      status: "Conforme",
-      suggestions: [
-        "Le plan respecte la structure demandée.",
-        "Objectifs clairs.",
-      ],
+  // --- ANALYSE IA ---
+  const analyzePlan = async () => {
+    if (!formTemplate) return;
+    setIsAnalyzing(true);
+    setAnalysis(null);
+
+    const suggestions = [];
+    let isConform = true;
+
+    // 1. Analyse des questions avec règles
+    if (formTemplate.questions && formTemplate.questions.length > 0) {
+      // Promesses parallèles pour l'IA
+      const aiPromises = formTemplate.questions.map(async (q) => {
+        const answer = answers[q.id] || "";
+
+        // Si la question a une règle, on appelle l'IA
+        if (q.rule && q.rule.trim().length > 0) {
+          const result = await analyzeAnswerWithAI(q.label, q.rule, answer);
+          if (result.status !== "Conforme") {
+            return result.feedback.map((f) => `[${q.label}] ${f}`);
+          }
+        } else if (!answer.trim()) {
+          // Pas de règle mais réponse vide
+          return [`[${q.label}] Réponse manquante.`];
+        }
+        return [];
+      });
+
+      // Attente de toutes les analyses
+      const results = await Promise.all(aiPromises);
+      results.flat().forEach((msg) => {
+        suggestions.push(msg);
+        isConform = false;
+      });
+    }
+
+    // 2. Vérification des champs requis (Meta)
+    (formTemplate.metaFields || []).forEach((f) => {
+      if (f.required && !metaValues[f.key]?.trim()) {
+        isConform = false;
+        suggestions.push(`Champ manquant : ${f.label}`);
+      }
     });
+
+    if (isConform && suggestions.length === 0) {
+      setAnalysis({
+        status: "Conforme",
+        suggestions: ["Le plan respecte toutes les règles."],
+      });
+    } else {
+      setAnalysis({ status: "À améliorer", suggestions });
+    }
+
+    setIsAnalyzing(false);
   };
 
   const handleSubmit = async () => {
@@ -406,9 +436,7 @@ export default function TeacherDashboard() {
     setSubmitting(true);
 
     try {
-      // Logique de titre pour sauvegarde
       let rawTitle = metaValues.title || "Plan de cours";
-      // Si titre est dans les réponses (cas du template user)
       if (formTemplate) {
         const titleQ = formTemplate.questions.find(
           (q) => q.label.toLowerCase() === "titre"
@@ -418,7 +446,6 @@ export default function TeacherDashboard() {
         }
       }
 
-      // --- FILENAME GENERATION ---
       const safeName = (teacherFullName || "Prof").replace(
         /[^a-zA-Z0-9]/g,
         "_"
@@ -565,7 +592,7 @@ export default function TeacherDashboard() {
                       value={selectedTemplateId}
                       onChange={(e) => setSelectedTemplateId(e.target.value)}
                     >
-                      <option value="">Sans titre • 4 questions</option>
+                      <option value="">Choississez un modele a remplir</option>
                       {templates.map((t) => (
                         <option key={t.id} value={t.id}>
                           {t.templateName || "Modèle"} • {t.questions?.length}{" "}
@@ -581,7 +608,7 @@ export default function TeacherDashboard() {
                     onSubmit={(e) => e.preventDefault()}
                     className="space-y-8 animate-fade-in"
                   >
-                    {/* 1. Meta */}
+                    {/* Meta Fields */}
                     <div>
                       <h3 className="text-lg font-bold text-white mb-2">
                         1. Informations générales
@@ -614,7 +641,7 @@ export default function TeacherDashboard() {
                       )}
                     </div>
 
-                    {/* 2. Questions */}
+                    {/* Questions */}
                     <div>
                       <h3 className="text-lg font-bold text-white mb-2">
                         2. Questions du plan (
@@ -655,7 +682,7 @@ export default function TeacherDashboard() {
                       </div>
                     </div>
 
-                    {/* 3. Weeks */}
+                    {/* Weeks */}
                     <div>
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="text-lg font-bold text-white">
@@ -708,7 +735,7 @@ export default function TeacherDashboard() {
                       </div>
                     </div>
 
-                    {/* 4. Exams */}
+                    {/* Exams */}
                     <div>
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="text-lg font-bold text-white">
@@ -764,13 +791,15 @@ export default function TeacherDashboard() {
                       </div>
                     </div>
 
-                    {/* Footer */}
                     <div className="flex gap-4 pt-6 border-t border-slate-700">
                       <button
                         onClick={analyzePlan}
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:opacity-90 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-purple-500/20"
+                        disabled={isAnalyzing}
+                        className={`bg-gradient-to-r from-blue-500 to-purple-600 hover:opacity-90 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-purple-500/20 ${
+                          isAnalyzing ? "opacity-50 cursor-wait" : ""
+                        }`}
                       >
-                        ✨ Analyser
+                        {isAnalyzing ? "Analyse en cours..." : "✨ Analyser"}
                       </button>
                       <button
                         onClick={handleSubmit}
@@ -786,9 +815,23 @@ export default function TeacherDashboard() {
                     </div>
 
                     {analysis && (
-                      <div className="bg-slate-800 border border-green-500/30 p-4 rounded-xl mt-4 animate-fade-in">
-                        <h4 className="font-bold text-green-400 mb-2">
-                          ✓ Résultat de l'analyse : {analysis.status}
+                      <div
+                        className={`border p-4 rounded-xl mt-4 animate-fade-in ${
+                          analysis.status === "Conforme"
+                            ? "bg-green-900/20 border-green-500/30"
+                            : "bg-red-900/20 border-red-500/30"
+                        }`}
+                      >
+                        <h4
+                          className={`font-bold mb-2 ${
+                            analysis.status === "Conforme"
+                              ? "text-green-400"
+                              : "text-red-400"
+                          }`}
+                        >
+                          {analysis.status === "Conforme"
+                            ? "✓ Analyse Conforme"
+                            : "⚠ À améliorer"}
                         </h4>
                         <ul className="list-disc pl-5 text-sm text-slate-300 space-y-1">
                           {analysis.suggestions.map((s, i) => (
