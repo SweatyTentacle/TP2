@@ -43,8 +43,8 @@ const getTitleFromMeta = (metaFields = [], metaValues = {}) => {
     if (v && String(v).trim()) return String(v).trim();
   }
   // Sinon, label contenant "titre"
-  const byLabel = metaFields.find(
-    (f) => (f.label || "").toLowerCase().includes("titre")
+  const byLabel = metaFields.find((f) =>
+    (f.label || "").toLowerCase().includes("titre")
   );
   if (byLabel) {
     const v = (metaValues || {})[byLabel.key];
@@ -108,7 +108,10 @@ export default function TeacherDashboard() {
         );
         const snap = await getDocs(q1);
         setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      } catch (e) {"erreur récupération plans", e} {
+      } catch (e) {
+        "Erreur lors de la récupération des plans", e;
+      }
+      {
         const q2 = query(
           collection(db, "coursePlans"),
           where("teacherId", "==", currentUser.uid)
@@ -116,13 +119,9 @@ export default function TeacherDashboard() {
         const snap = await getDocs(q2);
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         rows.sort((a, b) => {
-          const ta = a.createdAt?.toDate
-            ? a.createdAt.toDate().getTime()
-            : 0;
-          const tb = b.createdAt?.toDate
-            ? b.createdAt.toDate().getTime()
-            : 0;
-          return tb - ta;
+          const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+          const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+          return ta - tb;
         });
         setPlans(rows);
       }
@@ -320,10 +319,7 @@ export default function TeacherDashboard() {
     });
 
     // Exemples de règles simples
-    const titleVal = getTitleFromMeta(
-      formTemplate?.metaFields,
-      metaValues
-    );
+    const titleVal = getTitleFromMeta(formTemplate?.metaFields, metaValues);
     if (!titleVal || titleVal.length < 3) {
       ok = false;
       suggestions.push("Le titre est trop court.");
@@ -334,9 +330,7 @@ export default function TeacherDashboard() {
       const v = (answers[q.id] || "").trim();
       if (v.length < 10) {
         ok = false;
-        suggestions.push(
-          `Réponse trop courte: ${q.label || "Question"}`
-        );
+        suggestions.push(`Réponse trop courte: ${q.label || "Question"}`);
       }
     });
 
@@ -363,8 +357,7 @@ export default function TeacherDashboard() {
     let y = 10;
 
     const titleVal =
-      getTitleFromMeta(formTemplate?.metaFields, metaValues) ||
-      "Plan de cours";
+      getTitleFromMeta(formTemplate?.metaFields, metaValues) || "Plan de cours";
     docPDF.setFontSize(18);
     docPDF.text(titleVal, 10, y);
     y += 10;
@@ -388,52 +381,6 @@ export default function TeacherDashboard() {
     });
     y += 2;
 
-    // Semaines
-    docPDF.setFont("helvetica", "bold");
-    docPDF.text("Semaines:", 10, y);
-    y += 6;
-    planWeeks.forEach((w) => {
-      docPDF.setFont("helvetica", "bold");
-      docPDF.text(`${w.label}`, 10, y);
-      y += 6;
-      docPDF.setFont("helvetica", "normal");
-      const learn = docPDF.splitTextToSize(
-        `Apprentissage: ${w.learning || ""}`,
-        180
-      );
-      const hw = docPDF.splitTextToSize(
-        `Devoirs: ${w.homework || ""}`,
-        180
-      );
-      docPDF.text(learn, 10, y);
-      y += learn.length * 6;
-      docPDF.text(hw, 10, y);
-      y += hw.length * 6 + 4;
-      if (y > 270) {
-        docPDF.addPage();
-        y = 10;
-      }
-    });
-
-    // Évaluations
-    docPDF.setFont("helvetica", "bold");
-    docPDF.text("Évaluations:", 10, y);
-    y += 6;
-    planExams.forEach((ex, idx) => {
-      const lines = docPDF.splitTextToSize(
-        `#${idx + 1} ${ex.title || ""} • Date: ${
-          ex.date || "N/D"
-        } • Matière: ${ex.coverage || ""}`,
-        180
-      );
-      docPDF.text(lines, 10, y);
-      y += lines.length * 6 + 4;
-      if (y > 270) {
-        docPDF.addPage();
-        y = 10;
-      }
-    });
-
     // Questions: seulement celles du modèle
     docPDF.setFont("helvetica", "bold");
     docPDF.text("Questions du plan:", 10, y);
@@ -453,12 +400,52 @@ export default function TeacherDashboard() {
       }
     });
 
+    // Semaines
+    docPDF.setFont("helvetica", "bold");
+    docPDF.text("Semaines:", 10, y);
+    y += 6;
+    planWeeks.forEach((w) => {
+      docPDF.setFont("helvetica", "bold");
+      docPDF.text(`${w.label}`, 10, y);
+      y += 6;
+      docPDF.setFont("helvetica", "normal");
+      const learn = docPDF.splitTextToSize(
+        `Apprentissage: ${w.learning || ""}`,
+        180
+      );
+      const hw = docPDF.splitTextToSize(`Devoirs: ${w.homework || ""}`, 180);
+      docPDF.text(learn, 10, y);
+      y += learn.length * 6;
+      docPDF.text(hw, 10, y);
+      y += hw.length * 6 + 4;
+      if (y > 270) {
+        docPDF.addPage();
+        y = 10;
+      }
+    });
+
+    // Évaluations
+    docPDF.setFont("helvetica", "bold");
+    docPDF.text("Évaluations:", 10, y);
+    y += 6;
+    planExams.forEach((ex, idx) => {
+      const lines = docPDF.splitTextToSize(
+        `#${idx + 1} ${ex.title || ""} • Date: ${ex.date || "N/D"} • Matière: ${
+          ex.coverage || ""
+        }`,
+        180
+      );
+      docPDF.text(lines, 10, y);
+      y += lines.length * 6 + 4;
+      if (y > 270) {
+        docPDF.addPage();
+        y = 10;
+      }
+    });
+
     // Upload PDF
     const blob = docPDF.output("blob");
-    const refStor = ref(
-      storage,
-      `plans/${currentUser.uid}/${Date.now()}.pdf`
-    );
+    const refStor = ref(storage, `plans/${currentUser.uid}/${Date.now()}.pdf`);
     await uploadBytes(refStor, blob);
     const pdfUrl = await getDownloadURL(refStor);
 
@@ -564,7 +551,7 @@ export default function TeacherDashboard() {
                             </button>
                           )}
                         </div>
-                        
+
                         {p.coordinatorComment && p.status !== "Approuvé" && (
                           <div className="mt-3 p-3 bg-slate-900/50 rounded border border-slate-700">
                             <p className="text-xs text-slate-400 font-semibold mb-1">
@@ -608,15 +595,11 @@ export default function TeacherDashboard() {
                         onChange={handleSelectTemplate}
                         className="input-modern"
                       >
-                        <option value="">
-                          — Sélectionner un modèle —
-                        </option>
+                        <option value="">— Sélectionner un modèle —</option>
                         {templates.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.templateName ||
-                              t.meta?.title ||
-                              "Sans titre"}{" "}
-                            • {(t.questions || []).length} questions
+                            {t.templateName || t.meta?.title || "Sans titre"} •{" "}
+                            {(t.questions || []).length} questions
                           </option>
                         ))}
                       </select>
@@ -674,121 +657,11 @@ export default function TeacherDashboard() {
                       ))}
                     </div>
 
-                    {/* 2. Planification hebdomadaire */}
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-semibold text-white">
-                          2. Planification hebdomadaire
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={addWeek}
-                          className="px-2 py-1 text-sm bg-dark-bg border border-dark-border rounded"
-                        >
-                          + Semaine
-                        </button>
-                      </div>
-                      <div className="space-y-3">
-                        {planWeeks.map((w, i) => (
-                          <div
-                            key={w.id}
-                            className="p-3 rounded border border-dark-border"
-                          >
-                            <div className="flex justify-between items-center mb-2">
-                              <strong>{w.label}</strong>
-                              <button
-                                type="button"
-                                onClick={() => removeWeek(i)}
-                                className="text-red-400 text-sm"
-                              >
-                                Supprimer
-                              </button>
-                            </div>
-                            <textarea
-                              className="input-modern min-h-[60px]"
-                              placeholder="Ce qui sera appris..."
-                              value={w.learning}
-                              onChange={(e) =>
-                                updateWeek(i, "learning", e.target.value)
-                              }
-                            />
-                            <textarea
-                              className="input-modern min-h-[60px] mt-2"
-                              placeholder="Devoirs..."
-                              value={w.homework}
-                              onChange={(e) =>
-                                updateWeek(i, "homework", e.target.value)
-                              }
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 3. Évaluations */}
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-semibold text-white">
-                          3. Évaluations
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={addExam}
-                          className="px-2 py-1 text-sm bg-dark-bg border border-dark-border rounded"
-                        >
-                          + Évaluation
-                        </button>
-                      </div>
-                      <div className="space-y-3">
-                        {planExams.map((ex, i) => (
-                          <div
-                            key={ex.id}
-                            className="p-3 rounded border border-dark-border"
-                          >
-                            <div className="flex justify-between items-center mb-2">
-                              <strong>Évaluation #{i + 1}</strong>
-                              <button
-                                type="button"
-                                onClick={() => removeExam(i)}
-                                className="text-red-400 text-sm"
-                              >
-                                Supprimer
-                              </button>
-                            </div>
-                            <input
-                              className="input-modern"
-                              placeholder="Titre"
-                              value={ex.title}
-                              onChange={(e) =>
-                                updateExam(i, "title", e.target.value)
-                              }
-                            />
-                            <input
-                              className="input-modern mt-2"
-                              placeholder="Date (YYYY-MM-DD)"
-                              value={ex.date}
-                              onChange={(e) =>
-                                updateExam(i, "date", e.target.value)
-                              }
-                            />
-                            <textarea
-                              className="input-modern min-h-[60px] mt-2"
-                              placeholder="Matière couverte"
-                              value={ex.coverage}
-                              onChange={(e) =>
-                                updateExam(i, "coverage", e.target.value)
-                              }
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 4. Questions du plan (modèle uniquement) */}
+                    {/* 2. Questions du plan (modèle uniquement) */}
                     <div className="space-y-4">
                       <div className="flex justify-between items-center mb-2">
                         <h3 className="font-semibold text-white">
-                          4. Questions du plan (
+                          2. Questions du plan (
                           {(formTemplate.questions || []).length})
                         </h3>
                       </div>
@@ -854,6 +727,116 @@ export default function TeacherDashboard() {
                       ))}
                     </div>
 
+                    {/* 3. Planification hebdomadaire */}
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-semibold text-white">
+                          3. Planification hebdomadaire
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={addWeek}
+                          className="px-2 py-1 text-sm bg-dark-bg border border-dark-border rounded"
+                        >
+                          + Semaine
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {planWeeks.map((w, i) => (
+                          <div
+                            key={w.id}
+                            className="p-3 rounded border border-dark-border"
+                          >
+                            <div className="flex justify-between items-center mb-2">
+                              <strong>{w.label}</strong>
+                              <button
+                                type="button"
+                                onClick={() => removeWeek(i)}
+                                className="text-red-400 text-sm"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                            <textarea
+                              className="input-modern min-h-[60px]"
+                              placeholder="Ce qui sera appris..."
+                              value={w.learning}
+                              onChange={(e) =>
+                                updateWeek(i, "learning", e.target.value)
+                              }
+                            />
+                            <textarea
+                              className="input-modern min-h-[60px] mt-2"
+                              placeholder="Devoirs..."
+                              value={w.homework}
+                              onChange={(e) =>
+                                updateWeek(i, "homework", e.target.value)
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 4. Évaluations */}
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-semibold text-white">
+                          4. Évaluations
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={addExam}
+                          className="px-2 py-1 text-sm bg-dark-bg border border-dark-border rounded"
+                        >
+                          + Évaluation
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {planExams.map((ex, i) => (
+                          <div
+                            key={ex.id}
+                            className="p-3 rounded border border-dark-border"
+                          >
+                            <div className="flex justify-between items-center mb-2">
+                              <strong>Évaluation #{i + 1}</strong>
+                              <button
+                                type="button"
+                                onClick={() => removeExam(i)}
+                                className="text-red-400 text-sm"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                            <input
+                              className="input-modern"
+                              placeholder="Titre"
+                              value={ex.title}
+                              onChange={(e) =>
+                                updateExam(i, "title", e.target.value)
+                              }
+                            />
+                            <input
+                              className="input-modern mt-2"
+                              placeholder="Date (YYYY-MM-DD)"
+                              value={ex.date}
+                              onChange={(e) =>
+                                updateExam(i, "date", e.target.value)
+                              }
+                            />
+                            <textarea
+                              className="input-modern min-h-[60px] mt-2"
+                              placeholder="Matière couverte"
+                              value={ex.coverage}
+                              onChange={(e) =>
+                                updateExam(i, "coverage", e.target.value)
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* 5. Règles principales (lecture seule) */}
                     <div>
                       <h3 className="font-semibold text-white mb-2">
@@ -888,9 +871,7 @@ export default function TeacherDashboard() {
                           !analysis ? "opacity-50 cursor-not-allowed" : ""
                         }`}
                         title={
-                          !analysis
-                            ? "Analyse requise avant soumission"
-                            : ""
+                          !analysis ? "Analyse requise avant soumission" : ""
                         }
                         type="button"
                       >
@@ -910,9 +891,7 @@ export default function TeacherDashboard() {
                             : "bg-red-900/20 border-red-500"
                         }`}
                       >
-                        <h3 className="font-bold mb-2">
-                          {analysis.status}
-                        </h3>
+                        <h3 className="font-bold mb-2">{analysis.status}</h3>
                         <ul className="list-disc pl-5 text-sm text-slate-300">
                           {analysis.suggestions.map((s, i) => (
                             <li key={i}>{s}</li>
@@ -939,9 +918,8 @@ export default function TeacherDashboard() {
               Modifier ce plan ?
             </h2>
             <p className="text-slate-300 mb-6">
-              Modifier ce plan va{" "}
-              <strong>écraser l'ancienne version</strong> et renvoyer
-              une <strong>nouvelle demande d’approbation</strong> au
+              Modifier ce plan va <strong>Écraser l'ancienne version</strong> et
+              renvoyer une <strong>nouvelle demande d’approbation</strong> au
               coordonnateur.
             </p>
 

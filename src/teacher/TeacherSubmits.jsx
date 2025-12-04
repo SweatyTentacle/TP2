@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+// J'ai inclus 'orderBy' ici
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 
 const formatDateTime = (ts) => {
   if (!ts) return "N/A";
@@ -24,10 +25,22 @@ export default function TeacherSubmits() {
 
       const q = query(
         collection(db, "coursePlans"),
-        where("teacherId", "==", user.uid)
+        where("teacherId", "==", user.uid),
+        orderBy("createdAt", "asc") // ✅ Tri Croissant
       );
+      
       const snap = await getDocs(q);
-      setSubmits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      
+      let rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      // Tri JavaScript de sécurité (ta - tb = asc)
+      rows.sort((a, b) => {
+          const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+          const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+          return ta - tb;
+      });
+
+      setSubmits(rows);
     };
     load();
   }, []);
