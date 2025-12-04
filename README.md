@@ -165,15 +165,18 @@ VITE_OPENAI_API_KEY=votre_cle_api_openai_ici
 
 ## Team
 
-**[Votre Nom / Membre 1]**
-
+**[Antonin Founier Lequin / Membre 1]**
+- Logique de validation et commentaire
+- Correction de bug pauffinage
+**[Thu Khoa / Membre 2]**
 - Architecture React, routing et session management.
-- Dashboard Enseignant et intégration OpenAI.
+- Dashboard Coordonnateur Séction création de plan.
+**[Jason / Membre 3]**
 - Création des formulaires et génération PDF.
-
-**[Nom du coéquipier / Membre 2]**
-
-- Dashboard Coordonnateur et gestion des templates.
-- Logique de validation et commentaires.
+- Dashboatd coordonnateur séction setting et validation plan.
+**[Mike Ducasse / Membre 4]**
 - UI/UX Design (TailwindCSS, Dark Mode).
+- Dashboard Enseignant et intégration OpenAI.
+**[Charles Heroux / Membre 5]**
 - Sécurité Firestore et règles d’accès.
+- gestion des templates de plan.
